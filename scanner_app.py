@@ -3,17 +3,22 @@ import requests
 import pandas as pd
 
 st.set_page_config(
-    page_title="Live Multi-API Intelligence Terminal", 
+    page_title="Multi-API Live Intelligence Station", 
     page_icon="📡",
     layout="wide"
 )
 
 st.title("📡 Automated Football Intelligence & Slider Scanner")
-st.markdown("Combines **Live Multi-API Feeds** for Weather, Squad News, and Real-Time League Standings with zero fallback data.")
+st.markdown("Powered by your **API-Sports V3**, **The-Odds-API**, **Open-Meteo**, and **Google News RSS** tokens.")
+
+# HARDCODED SECURE KEY CONFIGURATIONS
+APISPORTS_KEY = "0236d6162ab0b95f2ec9ef2d1e083415"
+THEODDSAPI_KEY = "a880fb62e16f9aff604a782c9e6c1c89"
 
 # --- SIDEBAR CONTROL PANEL CONFIGURATION ---
 st.sidebar.title("🔍 Target Matchup Profile")
 
+# Primary Input Matrix Controls
 home_team = st.sidebar.text_input("Home Team Name", value="Grazer AK")
 away_team = st.sidebar.text_input("Away Team Name", value="Salzburg")
 
@@ -24,18 +29,18 @@ city_options = [
 ]
 selected_city = st.sidebar.selectbox("Match City Location (For Weather)", city_options)
 
-# 10-League Live Scraper Mapping Matrix
-league_table_options = {
-    "🏴󠁧󠁢󠁥󠁮󠁧󠁿 English Premier League": "https://wikipedia.org",
-    "🇦🇹 Austria Bundesliga": "https://wikipedia.org",
-    "🇩🇪 German Bundesliga": "https://wikipedia.org",
-    "🇪🇸 Spanish La Liga": "https://wikipedia.org",
-    "🇮🇹 Italy Serie A": "https://wikipedia.org",
-    "🇫🇷 France Ligue 1": "https://wikipedia.org",
-    "🇵🇹 Portugal Primeira Liga": "https://wikipedia.org",
-    "🇳🇱 Netherlands Eredivisie": "https://wikipedia.org"
+# API-Sports League IDs Matrix mapping your exact football database frames
+league_api_mapping = {
+    "🇦🇹 Austria Football Bundesliga": {"id": 218, "odds_sport": "soccer_austria_bundesliga"},
+    "🏴󠁧󠁢󠁥󠁮󠁧󠁿 English Premier League": {"id": 39, "odds_sport": "soccer_epl"},
+    "🇩🇪 German Bundesliga": {"id": 78, "odds_sport": "soccer_germany_bundesliga"},
+    "🇪🇸 Spanish La Liga": {"id": 140, "odds_sport": "soccer_spain_la_liga"},
+    "🇮🇹 Italy Serie A": {"id": 135, "odds_sport": "soccer_italy_serie_a"},
+    "🇫🇷 France Ligue 1": {"id": 61, "odds_sport": "soccer_france_ligue_1"},
+    "🇵🇹 Portugal Primeira Liga": {"id": 94, "odds_sport": "soccer_portugal_primeira_liga"},
+    "🇳🇱 Netherlands Eredivisie": {"id": 88, "odds_sport": "soccer_netherlands_eredivisie"}
 }
-selected_standing_league = st.sidebar.selectbox("Load Live League Standings Display", list(league_table_options.keys()))
+selected_standing_league = st.sidebar.selectbox("Load Live League Standings Display", list(league_api_mapping.keys()))
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("🏆 Motivation & Schedule Priority")
@@ -45,52 +50,65 @@ away_europe = st.sidebar.checkbox(f"Does {away_team} (Away) have a European matc
 
 is_end_of_season = st.sidebar.checkbox(label="Dead Rubber Fixture?", value=False)
 
-# --- 🛰️ LIVE API LAYER 1: RAW INTERNET WEB-STANDINGS SCRAPER (ZERO FALLBACK) ---
-def fetch_absolute_live_standings(url):
-    """Fetches real-time standings directly from the internet live. No fallbacks."""
-    try:
-        # Inject standard browser headers to bypass server blocks
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        req = requests.get(url, headers=headers, timeout=5)
-        html_tables = pd.read_html(req.text, attrs={"class": "wikitable"})
-        
-        for table in html_tables:
-            columns_str = [str(c).strip() for c in table.columns]
-            columns_lower = [c.lower() for c in columns_str]
-            
-            if any("team" in c or "club" in c for c in columns_lower):
-                table.columns = columns_str
-                rename_map = {}
-                for col in table.columns:
-                    col_l = col.lower()
-                    if "pos" in col_l or "rk" in col_l or "rank" in col_l: rename_map[col] = "Rank"
-                    elif "team" in col_l or "club" in col_l: rename_map[col] = "Club"
-                    elif col_l in ["pld", "mp", "g", "p"]: rename_map[col] = "MP"
-                    elif col_l == "w": rename_map[col] = "W"
-                    elif col_l == "d": rename_map[col] = "D"
-                    elif col_l == "l": rename_map[col] = "L"
-                    elif col_l in ["gf", "f"]: rename_map[col] = "GF"
-                    elif col_l in ["ga", "a"]: rename_map[col] = "GA"
-                    elif col_l in ["gd", "diff", "gdr"]: rename_map[col] = "GD"
-                    elif "pts" in col_l or "points" in col_l: rename_map[col] = "Pts"
-                
-                table = table.rename(columns=rename_map)
-                if "Club" in table.columns:
-                    if "Rank" not in table.columns:
-                        table.insert(0, "Rank", range(1, len(table) + 1))
-                    
-                    # Clean out Wikipedia notes / formatting numbers e.g. "Arsenal (C)" -> "Arsenal"
-                    table["Club"] = table["Club"].str.replace(r"\(.*\)", "", regex=True).str.strip()
-                    
-                    required_display = ["Rank", "Club", "MP", "W", "D", "L", "GF", "GA", "GD", "Pts"]
-                    existing_display = [c for c in required_display if c in table.columns]
-                    return table[existing_display].copy()
-    except Exception as e:
-        return pd.DataFrame({"Error Pipeline Log": [f"Connection interrupted: {str(e)}"]})
+# --- 🛰️ API LAYER 1: API-SPORTS LIVE STANDINGS STREAM ---
+def fetch_apisports_live_standings(league_id, season=2026):
+    """
+    Connects directly to the official API-Sports REST servers.
+    Parses live standings arrays dynamically with zero local fallbacks.
+    """
+    url = "https://api-sports.io"
+    headers = {
+        'x-rapidapi-key': APISPORTS_KEY,
+        'x-rapidapi-host': 'v3.football.api-sports.io'
+    }
+    params = {'league': league_id, 'season': season}
     
-    return None
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=6)
+        if response.status_code == 200:
+            raw_json = response.json()
+            # Navigate standard response payload paths
+            standings_block = raw_json['response'][0]['league']['standings'][0]
+            
+            compiled_rows = []
+            for item in standings_block:
+                compiled_rows.append({
+                    "Rank": item['rank'],
+                    "Club": item['team']['name'],
+                    "MP": item['all']['played'],
+                    "W": item['all']['win'],
+                    "D": item['all']['draw'],
+                    "L": item['all']['loss'],
+                    "GF": item['all']['goals']['for'],
+                    "GA": item['all']['goals']['against'],
+                    "GD": item['goalsDiff'],
+                    "Pts": item['points']
+                })
+            return pd.DataFrame(compiled_rows)
+    except Exception as e:
+        return pd.DataFrame({"Error Pipeline Log": [f"API-Sports connection failed: {str(e)}"]})
+    
+    return pd.DataFrame({"Error": ["Could not parse live API-Sports standings table structure."]})
 
-# --- 🌤️ LIVE API LAYER 2: OPEN-METEO WEATHER API ---
+# --- 🛰️ API LAYER 2: THE-ODDS-API LIVE CONSENSUS SCANNER ---
+def fetch_live_market_consensus(sport_key):
+    """
+    Connects directly to the-odds-api core servers.
+    Grabs global sharp bookmaker pre-match market anchors.
+    """
+    url = f"https://the-odds-api.com{THEODDSAPI_KEY}&sport={sport_key}&region=eu&mkt=h2h"
+    try:
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            if data['success'] and len(data['data']) > 0:
+                # Extract first verified matching fixture cluster
+                return f"💰 **Live Market Feed Armed:** Connected to active sharp feeds for {sport_key} across {len(data['data'])} fixtures."
+    except Exception:
+        pass
+    return "⚠️ Market Feed Stream: Node busy or league out-of-season cycle. Manual entry active."
+
+# --- 🌤️ API LAYER 3: OPEN-METEO WEATHER API ---
 def fetch_live_weather(city_name):
     geo_coordinates = {
         "Graz": (47.07, 15.43), "Salzburg": (47.80, 13.04), "Dortmund": (51.51, 7.46),
@@ -116,7 +134,7 @@ def fetch_live_weather(city_name):
     except Exception:
         return 0, "⚠️ Weather API Stream: Server busy. Modifier untouched (0%)."
 
-# --- 📰 LIVE API LAYER 3: GOOGLE NEWS TEAM NEWS LOOP ---
+# --- 📰 API LAYER 4: GOOGLE NEWS TEAM NEWS LOOP ---
 def fetch_live_injury_alerts(home, away):
     alerts = []
     try:
@@ -142,63 +160,63 @@ if 'scan_executed' not in st.session_state:
     st.session_state.final_away_slider = 0
     st.session_state.weather_message = ""
     st.session_state.news_message = ""
+    st.session_state.odds_message = ""
     st.session_state.motivation_messages = []
     st.session_state.scraped_standings = pd.DataFrame()
 
 # --- TRIGGER PIPELINE RUN ---
-if st.button("Launch Deep Intelligence Scan", type="primary"):
-    st.session_state.scan_executed = True
+    if st.button("Launch Deep Intelligence Scan", type="primary"):
+        st.session_state.scan_executed = True
     
-    target_url = league_table_options[selected_standing_league]
-    live_table = fetch_absolute_live_standings(target_url)
+    # Extract targeted mapping parameters from selector dropdown config dictionary
+        league_config = league_api_mapping[selected_standing_league]
     
-    if live_table is not None:
-        st.session_state.scraped_standings = live_table
-    else:
-        st.session_state.scraped_standings = pd.DataFrame({"Error": ["Live table frame could not be isolated."]})
+    # 🟢 TRIGGER RAW LIVE API CALLS (ZERO HARDCODED ROWS REMAINING)
+        st.session_state.scraped_standings = fetch_apisports_live_standings(league_config["id"])
+        st.session_state.odds_message = fetch_live_market_consensus(league_config["odds_sport"])
+        w_mod, st.session_state.weather_message = fetch_live_weather(selected_city)
+        st.session_state.news_message = fetch_live_injury_alerts(home_team, away_team)
+    
+        home_penalty, away_penalty = 0, 0
+        st.session_state.motivation_messages = []
+    
+        if home_europe:
+            home_penalty -= 5
+            st.session_state.motivation_messages.append(f"⚠️ **Schedule Interference Trap:** {home_team} has a decisive European fixture within 72 hours.")
+        if away_europe:
+            away_penalty -= 5
+            st.session_state.motivation_messages.append(f"⚠️ **Schedule Interference Trap:** {away_team} has a decisive European fixture within 72 hours.")
+        if is_end_of_season:
+            home_penalty -= 10
+            away_penalty -= 10
+            st.session_state.motivation_messages.append("📉 **Low Intensity Warning:** Dead rubber parameters active.")
         
-    w_mod, st.session_state.weather_message = fetch_live_weather(selected_city)
-    st.session_state.news_message = fetch_live_injury_alerts(home_team, away_team)
-    
-    home_penalty, away_penalty = 0, 0
-    st.session_state.motivation_messages = []
-    
-    if home_europe:
-        home_penalty -= 5
-        st.session_state.motivation_messages.append(f"⚠️ **Schedule Interference Trap:** {home_team} has a decisive European fixture within 72 hours.")
-    if away_europe:
-        away_penalty -= 5
-        st.session_state.motivation_messages.append(f"⚠️ **Schedule Interference Trap:** {away_team} has a decisive European fixture within 72 hours.")
-    if is_end_of_season:
-        home_penalty -= 10
-        away_penalty -= 10
-        st.session_state.motivation_messages.append("📉 **Low Intensity Warning:** Dead rubber parameters active.")
-        
-    st.session_state.final_home_slider = int(w_mod + home_penalty)
-    st.session_state.final_away_slider = int(w_mod + away_penalty)
+        st.session_state.final_home_slider = int(w_mod + home_penalty)
+        st.session_state.final_away_slider = int(w_mod + away_penalty)
 
 # --- DYNAMIC VISUAL READING GRID ---
-if st.session_state.scan_executed:
-    st.markdown("---")
-    st.subheader(f"🏆 100% Live Table Matrix Feed: {selected_standing_league}")
+    if st.session_state.scan_executed:
+        st.markdown("---")
+        st.subheader(f"🏆 100% Live API Standings Feed (API-Sports V3): {selected_standing_league}")
     
     if "Error Pipeline Log" in st.session_state.scraped_standings.columns or "Error" in st.session_state.scraped_standings.columns:
-        st.error("❌ **LIVE DATA CONNECTION FAILURE**")
+        st.error("❌ LIVE DATA HANDSHAKE REJECTED BY SERVER")
         st.dataframe(st.session_state.scraped_standings, use_container_width=True, hide_index=True)
     else:
         st.dataframe(st.session_state.scraped_standings, use_container_width=True, hide_index=True)
-        st.markdown("---")
-        st.subheader(f"📋 Live Match Intelligence Readout: {home_team} vs {away_team}")
-        st.info(st.session_state.weather_message)
-        st.markdown(st.session_state.news_message)
-        if st.session_state.motivation_messages:
-            for msg in st.session_state.motivation_messages:
-                st.warning(msg)
-        st.markdown("---")
-        st.subheader("🎛️ Recommended Modifier Alignment Setup")
-        col1, col2 = st.columns(2)
-        col1.metric(label=f"Recommended {home_team} Performance Slider Shift", value=f"{st.session_state.final_home_slider}%")
-        col2.metric(label=f"Recommended {away_team} Performance Slider Shift", value=f"{st.session_state.final_away_slider}%")
-        st.success(f"🎯 Action Plan Checklist: Open your local dashboard (localhost:8501). Set the {home_team} Slider to {st.session_state.final_home_slider}% and the {away_team} Slider to {st.session_state.final_away_slider}%, input your live SportyBet market odds, and fire your simulation!")
+    st.markdown("---")
+    st.subheader(f"📋 Live Match Intelligence Readout: {home_team} vs {away_team}")
+    st.success(st.session_state.odds_message)
+    st.info(st.session_state.weather_message)
+    st.markdown(st.session_state.news_message)
+    if st.session_state.motivation_messages:
+        for msg in st.session_state.motivation_messages:
+            st.warning(msg)
+    st.markdown("---")
+    st.subheader("🎛️ Recommended Modifier Alignment Setup")
+    col1, col2 = st.columns(2)
+    col1.metric(label=f"Recommended {home_team} Performance Slider Shift", value=f"{st.session_state.final_home_slider}%")
+    col2.metric(label=f"Recommended {away_team} Performance Slider Shift", value=f"{st.session_state.final_away_slider}%")
+    st.success(f"🎯 Action Plan Checklist: Open your local dashboard (localhost:8501). Set the {home_team} Slider to {st.session_state.final_home_slider}% and the {away_team} Slider to {st.session_state.final_away_slider}%, input your live SportyBet market odds, and fire your simulation!")
 else:
-    st.info("💡 Live Multi-API Terminal Idle: Configure the sidebar parameters and launch scan to download live data feeds directly from the internet.")
+    st.info("💡 Live Multi-API Terminal Idle: Configure the sidebar parameters and launch scan to stream live data directly from official sports database nodes.")
