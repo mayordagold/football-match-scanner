@@ -1,8 +1,6 @@
 import streamlit as st
 import requests
-import xml.etree.ElementTree as ET
 import pandas as pd
-from datetime import datetime
 
 st.set_page_config(
     page_title="Match Intelligence Scanner & Standings Console", 
@@ -30,7 +28,7 @@ selected_city = st.sidebar.selectbox("Match City Location (For Weather)", city_o
 
 # League Standings Selector Engine Tracker
 league_table_options = [
-    "🏴󠁧󠁢󠁥󠁮󠁧󠁿 English Premier League",
+    "🏴%E2%80%8D%F0%9F%A7%A1%E2%80%8D%F0%9F%92%A5 English Premier League",
     "🇦🇹 Austria Bundesliga",
     "🇩🇪 German Bundesliga",
     "🇪🇸 Spanish La Liga",
@@ -56,10 +54,6 @@ is_end_of_season = st.sidebar.checkbox(
 # --- MATHEMATICAL ENGINES & COMPONENT SIMULATORS ---
 
 def get_simulated_live_standings(league_name):
-    """
-    Generates real-time baseline league standings matrix arrays 
-    to track points differential, motivation, and goal data grids.
-    """
     if "Premier League" in league_name:
         data = [
             {"Rank": 1, "Club": "Manchester City", "MP": 5, "W": 4, "D": 1, "L": 0, "GF": 13, "GA": 5, "GD": 8, "Pts": 13},
@@ -83,7 +77,6 @@ def get_simulated_live_standings(league_name):
             {"Rank": 3, "Club": "Mid-Table Anchor", "MP": 5, "W": 2, "D": 1, "L": 2, "GF": 7, "GA": 7, "GD": 0, "Pts": 7},
         ]
     return pd.DataFrame(data)
-
 
 def check_weather_and_pitch_constraints(city_name):
     geo_coordinates = {
@@ -113,7 +106,6 @@ def check_weather_and_pitch_constraints(city_name):
         pass
     return 0, "📡 Environmental Signals: Weather node busy. Defaulting to standard 0% conditions."
 
-
 def check_squad_news_and_rotations(home, away):
     alerts = []
     try:
@@ -123,25 +115,54 @@ def check_squad_news_and_rotations(home, away):
         if response.status_code == 200:
             feed_text = response.text.lower()
             if home.lower() in feed_text and any(w in feed_text for w in ["injury", "injured", "absent", "rested", "suspended"]):
-                alerts.append(f"📰 **Squad Disruption ({home}):** Media text notes minor training selection constraints.")
+                alerts.append(f"📰 **Squad Disruption ({home}):** Media text notes minor selection constraints.")
             if away.lower() in feed_text and any(w in feed_text for w in ["injury", "injured", "absent", "rested", "suspended"]):
-                alerts.append(f"📰 **Squad Disruption ({away}):** Media text notes minor training selection constraints.")
+                alerts.append(f"📰 **Squad Disruption ({away}):** Media text notes minor selection constraints.")
         if not alerts:
-            alerts.append("✨ **Squad Signal Engine Stable:** No sudden unexpected squad fractures found in recent media grids.")
+            alerts.append("✨ **Squad Signal Engine Stable:** No unexpected squad fractures found in recent media grids.")
         return 0, 0, " | ".join(alerts)
     except Exception:
         return 0, 0, "📡 Squad News Pipeline: System standing by."
 
-# --- RUN LAUNCH PROCESSING SCAN ---
+# 🟢 FIX: PRE-INITIALIZE MEMORY STATE VARIABLES TO PREVENT PAGE LOAD CRASHES
+if 'scan_executed' not in st.session_state:
+    st.session_state.scan_executed = False
+    st.session_state.final_home_slider = 0
+    st.session_state.final_away_slider = 0
+    st.session_state.weather_message = "🌤️ Environmental Engine Standing By."
+    st.session_state.news_message = "📡 Squad News Pipeline: System standing by."
+    st.session_state.motivation_messages = []
+
+# --- TRIGGER PROCESSING RUN ---
 if st.button("Launch Deep Intelligence Scan", type="primary"):
-    st.markdown("---")
+    st.session_state.scan_executed = True
+    w_mod, st.session_state.weather_message = check_weather_and_pitch_constraints(selected_city)
+    _, _, st.session_state.news_message = check_squad_news_and_rotations(home_team, away_team)
     
-    # 📊 LAYOUT ELEMENT 1: Live League Standings Dashboard Display
+    home_penalty, away_penalty = 0, 0
+    st.session_state.motivation_messages = []
+    if home_europe:
+        home_penalty -= 5
+        st.session_state.motivation_messages.append(f"⚠️ **Schedule Interference Trap:** {home_team} has a massive European match in 72 hours. Expect rotation.")
+    if away_europe:
+        away_penalty -= 5
+        st.session_state.motivation_messages.append(f"⚠️ **Schedule Interference Trap:** {away_team} has a massive European match in 72 hours. Expect tactical rotation.")
+    if is_end_of_season:
+        home_penalty -= 10
+        away_penalty -= 10
+        st.session_state.motivation_messages.append("📉 **Low Intensity Warning:** End-of-season dead rubber context active.")
+        
+    st.session_state.final_home_slider = max(-10, min(10, w_mod + home_penalty))
+    st.session_state.final_away_slider = max(-10, min(10, w_mod + away_penalty))
+
+# --- DYNAMIC SCREEN GRAPHICS RENDER MATRIX ---
+if st.session_state.scan_executed:
+    st.markdown("---")
+    # LAYOUT ELEMENT 1: Live League Standings Dashboard Display
     st.subheader(f"🏆 Current Live Table Matrix: {selected_standing_league}")
     standings_df = get_simulated_live_standings(selected_standing_league)
     st.dataframe(standings_df, use_container_width=True, hide_index=True)
     
-    # Context Motivation Analyser Card
     st.markdown("##### 💡 Standings Motivation Clue Decoder:")
     if "Austria" in selected_standing_league:
         st.caption(f"📊 **Table Context:** **Salzburg** sits in 3rd place but holds a massive **Goal Differential (+7)** with a game in hand, making them highly efficient. **Grazer AK** is buried in 11th place, struggling defensively with a **-5 GD** and zero wins. Expect desperation from the home side, but high offensive efficiency from the away side.")
@@ -151,43 +172,20 @@ if st.button("Launch Deep Intelligence Scan", type="primary"):
     st.markdown("---")
     st.subheader(f"📋 Real-Time Match Intelligence Readout: {home_team} vs {away_team}")
     
-    # Run active scanner layers
-    w_mod, weather_message = check_weather_and_pitch_constraints(selected_city)
-    n_home, n_away, news_message = check_squad_news_and_rotations(home_team, away_team)
-    
-    # Handle tactical parameters
-    home_penalty, away_penalty = 0, 0
-    if home_europe:
-        home_penalty -= 5
-        st.warning(f"⚠️ **Schedule Interference Trap:** {home_team} has a massive European match in 72 hours. Expect rotation.")
-    if away_europe:
-        away_penalty -= 5
-        st.warning(f"⚠️ **Schedule Interference Trap:** {away_team} has a massive European match in 72 hours. Expect tactical rotation.")
-    if is_end_of_season:
-        home_penalty -= 10
-        away_penalty -= 10
-        st.warning("📉 **Low Intensity Warning:** End-of-season dead rubber context active.")
+    st.info(st.session_state.weather_message)
+    if "✨" in st.session_state.news_message: 
+        st.success(st.session_state.news_message)
+    else: 
+        st.markdown(st.session_state.news_message)
         
-    # Fuses your weather parameters, tactical European penalties, and squad news news constraints together perfectly
-        final_home_slider = max(-10, min(10, w_mod + home_penalty + n_home))
-        final_away_slider = max(-10, min(10, w_mod + away_penalty + n_away))
-    
-    st.info(weather_message)
-    if "✨" in news_message: st.success(news_message)
-    else: st.markdown(news_message)
-            
+    if st.session_state.motivation_messages:
+        for message in st.session_state.motivation_messages:
+            st.warning(message)
     st.markdown("---")
     st.subheader("🎛️ Recommended Modifier Alignment Setup")
     col1, col2 = st.columns(2)
-    
-    col1.metric(
-        label=f"Recommended **{home_team}** Performance Slider Shift", 
-        value=f"{final_home_slider}%",
-        delta="Apply Reduction" if final_home_slider < 0 else "Keep Baseline",
-        delta_color="inverse" if final_home_slider < 0 else "normal"
-    )
-    col2.metric(
-        label=f"Recommended **{away_team}** Performance Slider Shift", 
-        value=f"{final_away_slider}%",
-        delta="Apply Reduction" if final_away_slider < 0 else "Keep Baseline", delta_color="inverse" if final_away_slider < 0 else "normal")
-    st.success(f"🎯 Action Plan Checklist: Open your local prediction engine dashboard page (localhost:8501). In your sidebar, move the {home_team} Slider to {final_home_slider}% and the {away_team} Slider to {final_away_slider}%, enter your live SportyBet market odds, and fire your simulation!")
+    col1.metric(label=f"Recommended {home_team} Performance Slider Shift", value=f"{st.session_state.final_home_slider}%", delta="Apply Reduction" if st.session_state.final_home_slider < 0 else "Keep Baseline", delta_color="inverse" if st.session_state.final_home_slider < 0 else "normal")
+    col2.metric(label=f"Recommended {away_team} Performance Slider Shift", value=f"{st.session_state.final_away_slider}%", delta="Apply Reduction" if st.session_state.final_away_slider < 0 else "Keep Baseline", delta_color="inverse" if st.session_state.final_away_slider < 0 else "normal")
+    st.success(f"🎯 Action Plan Checklist: Open your local prediction engine dashboard page (localhost:8501). In your sidebar, move the {home_team} Slider to {st.session_state.final_home_slider}% and the {away_team} Slider to {st.session_state.final_away_slider}%, enter your live SportyBet market odds, and fire your simulation!")
+else:
+    st.info("💡 Scanner Dashboard Idle: Configure the sidebar profile controls and click 'Launch Deep Intelligence Scan' to extract matchday parameters.")
