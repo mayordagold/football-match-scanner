@@ -168,8 +168,9 @@ if st.button("Launch Deep Intelligence Scan", type="primary"):
         away_penalty -= 10
         st.warning("📉 **Low Intensity Warning:** End-of-season dead rubber context active.")
         
-    final_home_slider = max(-10, min(10, w_mod + home_penalty))
-    final_away_slider = max(-10, min(10, w_mod + away_penalty))
+    # Fuses your weather parameters, tactical European penalties, and squad news news constraints together perfectly
+        final_home_slider = max(-10, min(10, w_mod + home_penalty + n_home))
+        final_away_slider = max(-10, min(10, w_mod + away_penalty + n_away))
     
     st.info(weather_message)
     if "✨" in news_message: st.success(news_message)
