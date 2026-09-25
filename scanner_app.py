@@ -9,10 +9,10 @@ st.set_page_config(
 )
 
 st.title("📡 Automated Football Intelligence & Slider Scanner")
-st.markdown("Powered by your **API-Sports V3**, **The-Odds-API**, **Open-Meteo**, and **Google News RSS** tokens.")
+st.markdown("Powered by your **AllSportsApi**, **The-Odds-API**, **Open-Meteo**, and **Google News RSS** tokens.")
 
 # HARDCODED SECURE KEY CONFIGURATIONS
-APISPORTS_KEY = "0236d6162ab0b95f2ec9ef2d1e083415"
+ALLSPORTSAPI_KEY = "3e43bc859f75abbb20212db989119e195b915f145d37dab5cb4b109c3f52110b"
 THEODDSAPI_KEY = "a880fb62e16f9aff604a782c9e6c1c89"
 
 # --- SIDEBAR CONTROL PANEL CONFIGURATION ---
@@ -29,16 +29,16 @@ city_options = [
 ]
 selected_city = st.sidebar.selectbox("Match City Location (For Weather)", city_options)
 
-# API-Sports League IDs Matrix mapping your exact football database frames
+# AllSportsApi League IDs Matrix mapping your exact football database frames
 league_api_mapping = {
-    "🇦🇹 Austria Football Bundesliga": {"id": 218, "odds_sport": "soccer_austria_bundesliga", "fallback_slug": "austrian-bundesliga"},
-    "Sub-Division: English Premier League": {"id": 39, "odds_sport": "soccer_epl", "fallback_slug": "epl"},
-    "Sub-Division: German Bundesliga": {"id": 78, "odds_sport": "soccer_germany_bundesliga", "fallback_slug": "german-bundesliga"},
-    "Sub-Division: Spanish La Liga": {"id": 140, "odds_sport": "soccer_spain_la_liga", "fallback_slug": "la-liga"},
-    "Sub-Division: Italy Serie A": {"id": 135, "odds_sport": "soccer_italy_serie_a", "fallback_slug": "serie-a"},
-    "Sub-Division: France Ligue 1": {"id": 61, "odds_sport": "soccer_france_ligue_1", "fallback_slug": "ligue-1"},
-    "Sub-Division: Portugal Primeira Liga": {"id": 94, "odds_sport": "soccer_portugal_primeira_liga", "fallback_slug": "primeira-liga"},
-    "Sub-Division: Netherlands Eredivisie": {"id": 88, "odds_sport": "soccer_netherlands_eredivisie", "fallback_slug": "eredivisie"}
+    "🇦🇹 Austria Football Bundesliga": {"id": 91, "odds_sport": "soccer_austria_bundesliga", "fallback_slug": "austrian-bundesliga"},
+    "Sub-Division: English Premier League": {"id": 152, "odds_sport": "soccer_epl", "fallback_slug": "epl"},
+    "Sub-Division: German Bundesliga": {"id": 175, "odds_sport": "soccer_germany_bundesliga", "fallback_slug": "german-bundesliga"},
+    "Sub-Division: Spanish La Liga": {"id": 302, "odds_sport": "soccer_spain_la_liga", "fallback_slug": "la-liga"},
+    "Sub-Division: Italy Serie A": {"id": 207, "odds_sport": "soccer_italy_serie_a", "fallback_slug": "serie-a"},
+    "Sub-Division: France Ligue 1": {"id": 168, "odds_sport": "soccer_france_ligue_1", "fallback_slug": "ligue-1"},
+    "Sub-Division: Portugal Primeira Liga": {"id": 266, "odds_sport": "soccer_portugal_primeira_liga", "fallback_slug": "primeira-liga"},
+    "Sub-Division: Netherlands Eredivisie": {"id": 244, "odds_sport": "soccer_netherlands_eredivisie", "fallback_slug": "eredivisie"}
 }
 selected_standing_league = st.sidebar.selectbox("Load Live League Standings Display", list(league_api_mapping.keys()))
 
@@ -53,83 +53,81 @@ is_end_of_season = st.sidebar.checkbox(label="Dead Rubber Fixture?", value=False
 st.sidebar.markdown("---")
 submit_scan = st.sidebar.button("🚀 Launch Deep Intelligence Scan", type="primary", use_container_width=True)
 
-# --- 🛰️ API LAYER 1: FAIL-SAFE STANDINGS PARSER ---
-def fetch_absolute_live_standings(league_id, fallback_slug, season=2026):
+# --- 🛰️ API LAYER 1: ALLSPORTSAPI LIVE STANDINGS CORE ---
+def fetch_allsportsapi_live_standings(league_id, fallback_slug, season="2026/2027"):
     """
-    Safely handles nested responses to avoid KeyError loops.
+    Connects directly to the AllSportsApi REST servers.
+    Parses active multi-stage league tables cleanly using your new credentials.
     """
-    # 1st Priority Route: Direct Structured JSON Stream Data Channel
+    url = "https://allosportsapi.com"
+    # Alternative direct sub-domain fallback route endpoint configuration
+    url = "https://allsportsapi.com"
+    
+    params = {
+        'met': 'Standings',
+        'leagueId': league_id,
+        'APIkey': ALLSPORTSAPI_KEY
+    }
+    
     try:
-        slug_map = {
-            "austrian-bundesliga": "https://githubusercontent.com",
-            "epl": "https://githubusercontent.com",
-            "german-bundesliga": "https://githubusercontent.com",
-            "la-liga": "https://githubusercontent.com",
-            "serie-a": "https://githubusercontent.com",
-            "ligue-1": "https://githubusercontent.com",
-            "primeira-liga": "https://githubusercontent.com",
-            "eredivisie": "https://githubusercontent.com"
-        }
-        if fallback_slug in slug_map:
-            target_slug = slug_map.get(fallback_slug, "at/bundesliga")
-            live_endpoint = f"https://githubusercontent.com{target_slug}.json"
-
-            response = requests.get(live_endpoint, timeout=5)
-            if response.status_code == 200:
-                json_data = response.json()
-                standings_list = json_data.get('standings', [])
-                compiled_rows = []
-                for idx, row in enumerate(standings_list):
-                    compiled_rows.append({
-                        "Rank": idx + 1,
-                        "Club": row.get('team', {}).get('name', 'Unknown'),
-                        "MP": row.get('played', 0),
-                        "W": row.get('won', 0),
-                        "D": row.get('drawn', 0),
-                        "L": row.get('lost', 0),
-                        "GF": row.get('goals_for', 0),
-                        "GA": row.get('goals_against', 0),
-                        "GD": row.get('goals_difference', 0),
-                        "Pts": row.get('points', 0)
-                    })
-                if compiled_rows:
-                    return pd.DataFrame(compiled_rows)
-    except Exception:
-        pass
-
-    # 2nd Priority Route: API-Sports Fallback Engine Endpoint Parsing
-    url = "https://api-sports.io"
-    headers = {'x-rapidapi-key': APISPORTS_KEY, 'x-rapidapi-host': 'v3.football.api-sports.io'}
-    params = {'league': league_id, 'season': season}
-    try:
-        response = requests.get(url, headers=headers, params=params, timeout=4)
+        response = requests.get(url, params=params, timeout=6)
         if response.status_code == 200:
             raw_json = response.json()
-            if 'response' in raw_json and len(raw_json['response']) > 0:
-                # Correctly capture the nested standings array layout frame
-                league_data = raw_json['response'][0]['league']
-                # API-Sports nests tables inside a multi-list structure [['standings']]
-                standings_block = league_data['standings'][0] if isinstance(league_data['standings'][0], list) else league_data['standings']
+            
+            # Extract list results from data nodes
+            standings_block = raw_json.get('result', {}).get('total', [])
+            
+            # If the platform API endpoint structure returns empty array responses, skip to failover stream
+            if not standings_block and 'result' in raw_json and isinstance(raw_json['result'], list):
+                standings_block = raw_json['result']
                 
-                compiled_rows = []
-                for item in standings_block:
-                    compiled_rows.append({
-                        "Rank": item.get('rank', 0),
-                        "Club": item.get('team', {}).get('name', 'Unknown'),
-                        "MP": item.get('all', {}).get('played', 0),
-                        "W": item.get('all', {}).get('win', 0),
-                        "D": item.get('all', {}).get('draw', 0),
-                        "L": item.get('all', {}).get('loss', 0),
-                        "GF": item.get('all', {}).get('goals', {}).get('for', 0),
-                        "GA": item.get('all', {}).get('goals', {}).get('against', 0),
-                        "GD": item.get('goalsDiff', 0),
-                        "Pts": item.get('points', 0)
-                    })
-                return pd.DataFrame(compiled_rows)
+            compiled_rows = []
+            for item in standings_block:
+                compiled_rows.append({
+                    "Rank": item.get('standing_place', item.get('position', 0)),
+                    "Club": item.get('standing_team', item.get('team_name', 'Unknown Team')),
+                    "MP": item.get('standing_P', 0),
+                    "W": item.get('standing_W', 0),
+                    "D": item.get('standing_D', 0),
+                    "L": item.get('standing_L', 0),
+                    "GF": item.get('standing_F', 0),
+                    "GA": item.get('standing_A', 0),
+                    "GD": item.get('standing_GD', 0),
+                    "Pts": item.get('standing_PTS', 0)
+                })
+            if compiled_rows:
+                df_res = pd.DataFrame(compiled_rows)
+                # Ensure correct sorting hierarchy natively
+                df_res = df_res.sort_values(by=["Pts", "GD"], ascending=False).reset_index(drop=True)
+                df_res["Rank"] = range(1, len(df_res) + 1)
+                return df_res
     except Exception:
         pass
 
-    # Clean Fallback Structure to guarantee that a KeyError is never generated again
+    # Universal structural backup path utilizing the secondary open JSON results server if an API network timeout occurs
+    try:
+        fallback_url = f"https://fixturedownload.com{fallback_slug}-2026"
+        f_resp = requests.get(fallback_url, timeout=5)
+        if f_resp.status_code == 200:
+            fixtures = f_resp.json()
+            table = {}
+            for f in fixtures:
+                if f.get('HomeTeamScore') is not None and f.get('AwayTeamScore') is not None:
+                    h, a = f['HomeTeam'], f['AwayTeam']
+                    hs, as_ = int(f['HomeTeamScore']), int(f['AwayTeamScore'])
+                    for t in [h, a]:
+                        if t not in table: table[t] = {"MP": 0, "W": 0, "D": 0, "L": 0, "GF": 0, "GA": 0, "Pts": 0}
+                    table[h]["MP"] += 1; table[a]["MP"] += 1; table[h]["GF"] += hs; table[h]["GA"] += as_; table[a]["GF"] += as_; table[a]["GA"] += hs
+                    if hs > as_: table[h]["W"] += 1; table[h]["Pts"] += 3; table[a]["L"] += 1
+                    elif hs == as_: table[h]["D"] += 1; table[h]["Pts"] += 1; table[a]["D"] += 1; table[a]["Pts"] += 1
+                    else: table[a]["W"] += 1; table[a]["Pts"] += 3; table[h]["L"] += 1
+            df_list = [{"Club": k, "MP": v["MP"], "W": v["W"], "D": v["D"], "L": v["L"], "GF": v["GF"], "GA": v["GA"], "GD": v["GF"] - v["GA"], "Pts": v["Pts"]} for k, v in table.items()]
+            res_df = pd.DataFrame(df_list).sort_values(by=["Pts", "GD"], ascending=False).reset_index(drop=True)
+            res_df.insert(0, "Rank", range(1, len(res_df) + 1))
+            return res_df
+    except Exception:
+        pass
+
     return pd.DataFrame([{
         "Rank": 1, "Club": "Live Matchday Feeds Syncing...", "MP": 0, "W": 0, "D": 0, "L": 0, "GF": 0, "GA": 0, "GD": 0, "Pts": 0
     }])
@@ -181,54 +179,55 @@ def fetch_live_injury_alerts(home, away):
         return " | ".join(alerts)
     except Exception:
         return "📡 Injury Stream: RSS pipeline stable and monitoring data feeds."
-
-# --- INITIALIZE SESSION STATE MEMORY HOOKS ---
-if 'scan_executed' not in st.session_state:
-    st.session_state.scan_executed = False
-    st.session_state.final_home_slider = 0
-    st.session_state.final_away_slider = 0
-    st.session_state.weather_message = ""
-    st.session_state.news_message = ""
-    st.session_state.motivation_messages = []
-    st.session_state.scraped_standings = pd.DataFrame()
-# --- TRIGGER EXECUTION FLOW PIPELINE ---
-if submit_scan:
-    st.session_state.scan_executed = True
-    league_config = league_api_mapping[selected_standing_league]
-    st.session_state.scraped_standings = fetch_absolute_live_standings(league_config["id"], league_config["fallback_slug"])
-    w_mod, st.session_state.weather_message = fetch_live_weather(selected_city)
-    st.session_state.news_message = fetch_live_injury_alerts(home_team, away_team)
-    home_penalty, away_penalty = 0, 0
-    st.session_state.motivation_messages = []
-    if home_europe:
-        home_penalty -= 5
-        st.session_state.motivation_messages.append(f"⚠️ Schedule Interference Trap: {home_team} has a decisive European fixture within 72 hours.")
-    if away_europe:
-        away_penalty -= 5
-        st.session_state.motivation_messages.append(f"⚠️ Schedule Interference Trap: {away_team} has a decisive European fixture within 72 hours.")
-    if is_end_of_season:
-        home_penalty -= 10
-        away_penalty -= 10
-        st.session_state.motivation_messages.append("📉 Low Intensity Warning: Dead rubber parameters active.")
-    st.session_state.final_home_slider = int(w_mod + home_penalty)
-    st.session_state.final_away_slider = int(w_mod + away_penalty)
-# --- VISUAL GRAPHICS RENDER MATRIX ---
-if st.session_state.scan_executed:
-    st.markdown("---")
-    st.subheader(f"🏆 100% Live Standings Table: {selected_standing_league}")
-    st.dataframe(st.session_state.scraped_standings, use_container_width=True, hide_index=True)
-    st.markdown("---")
-    st.subheader(f"📋 Live Match Intelligence Readout: {home_team} vs {away_team}")
-    st.info(st.session_state.weather_message)
-    st.markdown(st.session_state.news_message)
-    if st.session_state.motivation_messages:
-        for msg in st.session_state.motivation_messages:
-            st.warning(msg)
-    st.markdown("---")
-    st.subheader("🎛️ Recommended Modifier Alignment Setup")
-    col1, col2 = st.columns(2)
-    col1.metric(label=f"Recommended {home_team} Performance Slider Shift", value=f"{st.session_state.final_home_slider}%")
-    col2.metric(label=f"Recommended {away_team} Performance Slider Shift", value=f"{st.session_state.final_away_slider}%")
-    st.success(f"🎯 Action Plan Checklist: Open your local dashboard (localhost:8501). Set the {home_team} Slider to {st.session_state.final_home_slider}% and the {away_team} Slider to {st.session_state.final_away_slider}%, input your live SportyBet market odds, and fire your simulation!")
-else:
-    st.info("💡 Live Multi-API Terminal Idle: Configure the sidebar parameters and launch scan to stream live data directly from official sports database nodes.")
+    # --- INITIALIZE SESSION STATE MEMORY HOOKS ---
+    
+        if 'scan_executed' not in st.session_state:
+            st.session_state.scan_executed = False
+            st.session_state.final_home_slider = 0
+            st.session_state.final_away_slider = 0
+            st.session_state.weather_message = ""
+            st.session_state.news_message = ""
+            st.session_state.motivation_messages = []
+            st.session_state.scraped_standings = pd.DataFrame()
+    #--- TRIGGER EXECUTION FLOW PIPELINE ---
+        
+        if submit_scan:
+            st.session_state.scan_executed = Trueleague_config = league_api_mapping[selected_standing_league]
+    # Triggers the new AllSportsApi structured pipeline loop seamlessly
+            st.session_state.scraped_standings = fetch_allsportsapi_live_standings(league_config["id"], league_config["fallback_slug"])
+            w_mod, st.session_state.weather_message = fetch_live_weather(selected_city)
+            st.session_state.news_message = fetch_live_injury_alerts(home_team, away_team)
+            home_penalty, away_penalty = 0, 0
+            st.session_state.motivation_messages = []
+            if home_europe:
+                home_penalty -= 5
+                st.session_state.motivation_messages.append(f"⚠️ Schedule Interference Trap: {home_team} has a decisive European fixture within 72 hours.")
+                if away_europe:
+                    away_penalty -= 5
+                    st.session_state.motivation_messages.append(f"⚠️ Schedule Interference Trap: {away_team} has a decisive European fixture within 72 hours.")
+                if is_end_of_season:
+                    home_penalty -= 10
+                    away_penalty -= 10
+                    st.session_state.motivation_messages.append("📉 Low Intensity Warning: Dead rubber parameters active.")
+            st.session_state.final_home_slider = int(w_mod + home_penalty)
+            st.session_state.final_away_slider = int(w_mod + away_penalty)
+    # --- VISUAL GRAPHICS RENDER MATRIX ---
+    if st.session_state.scan_executed:
+        st.markdown("---")
+        st.subheader(f"🏆 100% Live Standings Table (AllSportsApi): {selected_standing_league}")
+        st.dataframe(st.session_state.scraped_standings, use_container_width=True, hide_index=True)
+        st.markdown("---")
+        st.subheader(f"📋 Live Match Intelligence Readout: {home_team} vs {away_team}")
+        st.info(st.session_state.weather_message)
+        st.markdown(st.session_state.news_message)
+        if st.session_state.motivation_messages:
+            for msg in st.session_state.motivation_messages:
+                st.warning(msg)
+        st.markdown("---")
+        st.subheader("🎛️ Recommended Modifier Alignment Setup")
+        col1, col2 = st.columns(2)
+        col1.metric(label=f"Recommended {home_team} Performance Slider Shift", value=f"{st.session_state.final_home_slider}%")
+        col2.metric(label=f"Recommended {away_team} Performance Slider Shift", value=f"{st.session_state.final_away_slider}%")
+        st.success(f"🎯 Action Plan Checklist: Open your local dashboard (localhost:8501). Set the {home_team} Slider to {st.session_state.final_home_slider}% and the {away_team} Slider to {st.session_state.final_away_slider}%, input your live SportyBet market odds, and fire your simulation!")
+    else:
+        st.info("💡 Live Multi-API Terminal Idle: Configure the sidebar parameters and launch scan to stream live data directly from official sports database nodes.")
