@@ -17,15 +17,16 @@ st.sidebar.title("🔍 Matchday Profile Selector")
 home_team = st.sidebar.text_input("Home Club", value="Arsenal")
 away_team = st.sidebar.text_input("Away Club", value="Leeds")
 
+# 🟢 CLEAN MATRIX DICTIONARY MAPPING (NO ENCODING BUGS)
 league_api_mapping = {
-    "举️ English Premier League": {"slug": "epl"},
-    "🇦🇹 Austria Football Bundesliga": {"slug": "austrian-bundesliga"},
-    "🇩🇪 German Bundesliga": {"slug": "german-bundesliga"},
-    "🇪🇸 Spanish La Liga": {"slug": "la-liga"},
-    "🇮🇹 Italy Serie A": {"slug": "serie-a"},
-    "🇫🇷 France Ligue 1": {"slug": "ligue-1"},
-    "🇵🇹 Portugal Primeira Liga": {"slug": "primeira-liga"},
-    "🇳🇱 Netherlands Eredivisie": {"slug": "eredivisie"}
+    "English Premier League (EPL)": {"slug": "epl"},
+    "Austria Football Bundesliga": {"slug": "austrian-bundesliga"},
+    "German Bundesliga": {"slug": "german-bundesliga"},
+    "Spanish La Liga": {"slug": "la-liga"},
+    "Italy Serie A": {"slug": "serie-a"},
+    "France Ligue 1": {"slug": "ligue-1"},
+    "Portugal Primeira Liga": {"slug": "primeira-liga"},
+    "Netherlands Eredivisie": {"slug": "eredivisie"}
 }
 selected_league = st.sidebar.selectbox("Active League Division Table", list(league_api_mapping.keys()))
 
