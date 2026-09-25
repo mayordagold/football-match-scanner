@@ -18,6 +18,7 @@ THEODDSAPI_KEY = "a880fb62e16f9aff604a782c9e6c1c89"
 # --- SIDEBAR CONTROL PANEL CONFIGURATION ---
 st.sidebar.title("🔍 Target Matchup Profile")
 
+# Primary Input Matrix Controls
 home_team = st.sidebar.text_input("Home Team Name", value="Grazer AK")
 away_team = st.sidebar.text_input("Away Team Name", value="Salzburg")
 
@@ -28,7 +29,7 @@ city_options = [
 ]
 selected_city = st.sidebar.selectbox("Match City Location (For Weather)", city_options)
 
-# Upgraded mapping using key identifiers for direct fallback routing
+# API-Sports League IDs Matrix mapping your exact football database frames
 league_api_mapping = {
     "🇦🇹 Austria Football Bundesliga": {"id": 218, "odds_sport": "soccer_austria_bundesliga", "fallback_slug": "austrian-bundesliga"},
     "Sub-Division: English Premier League": {"id": 39, "odds_sport": "soccer_epl", "fallback_slug": "epl"},
@@ -97,7 +98,7 @@ def fetch_absolute_live_standings(league_id, fallback_slug, season=2026):
         if response.status_code == 200:
             raw_json = response.json()
             if not raw_json.get('errors') and raw_json.get('response'):
-                standings_block = raw_json['response'][0]['league']['standings'][0]
+                standings_block = raw_json['response']['league']['standings'][0]
                 compiled_rows = []
                 for item in standings_block:
                     compiled_rows.append({
@@ -134,7 +135,7 @@ def fetch_absolute_live_standings(league_id, fallback_slug, season=2026):
     except Exception:
         pass
 
-    return pd.DataFrame({"Notice": ["Real-time standings are updating in background. Re-run scan shortly."]})\
+    return pd.DataFrame({"Notice": ["Real-time standings are updating in background. Re-run scan shortly."]})
 
 # --- 🌤️ LIVE API LAYER 2: OPEN-METEO WEATHER ENGINE ---
 def fetch_live_weather(city_name):
@@ -174,13 +175,13 @@ def fetch_live_injury_alerts(home, away):
         response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=4)
         if response.status_code == 200:
             feed_text = response.text.lower()
-        if home.lower() in feed_text and any(w in feed_text for w in ["injury", "injured", "absent", "rested", "suspended"]):
-            alerts.append(f"📰 Live Injury Stream: Potential lineup limits scanned for {home}.")
-            if away.lower() in feed_text and any(w in feed_text for w in ["injury", "injured", "absent", "rested", "suspended"]):
-                alerts.append(f"📰 Live Injury Stream: Potential lineup limits scanned for {away}.")
-                if not alerts:
-                    alerts.append("✨ Live Injury Stream: Squad selection matrices stable. No high-volatility anomalies found.")
-                    return " | ".join(alerts)
+            if home.lower() in feed_text and any(w in feed_text for w in ["injury", "injured", "absent", "rested", "suspended"]):
+                alerts.append(f"📰 Live Injury Stream: Potential lineup limits scanned for {home}.")
+                if away.lower() in feed_text and any(w in feed_text for w in ["injury", "injured", "absent", "rested", "suspended"]):
+                    alerts.append(f"📰 Live Injury Stream: Potential lineup limits scanned for {away}.")
+                    if not alerts:
+                        alerts.append("✨ Live Injury Stream: Squad selection matrices stable. No high-volatility anomalies found.")
+                        return " | ".join(alerts)
     except Exception:
         return "📡 Injury Stream: RSS pipeline stable and monitoring data feeds."
     #--- INITIALIZE SESSION STATE MEMORY HOOKS ---
@@ -193,27 +194,27 @@ def fetch_live_injury_alerts(home, away):
         st.session_state.motivation_messages = []
         st.session_state.scraped_standings = pd.DataFrame()
     #--- TRIGGER EXECUTION FLOW PIPELINE ---
-    if submit_scan:
-        st.session_state.scan_executed = True
-        league_config = league_api_mapping[selected_standing_league]
-    # Isolated layer call safely processes without freezing the downstream loop
-    st.session_state.scraped_standings = fetch_absolute_live_standings(league_config["id"], 
-    league_config["fallback_slug"])
-    w_mod, st.session_state.weather_message = fetch_live_weather(selected_city)
-    st.session_state.news_message = fetch_live_injury_alerts(home_team, away_team)
-    home_penalty, away_penalty = 0, 0
-    st.session_state.motivation_messages = []
-    if home_europe:
-        home_penalty -= 5
-        st.session_state.motivation_messages.append(f"⚠️ Schedule Interference Trap: {home_team} has a decisive European fixture within 72 hours.")
-        if away_europe:away_penalty -= 5
-        st.session_state.motivation_messages.append(f"⚠️ Schedule Interference Trap: {away_team} has a decisive European fixture within 72 hours.")
-        if is_end_of_season:home_penalty -= 10
-        away_penalty -= 10
-        st.session_state.motivation_messages.append("📉 Low Intensity Warning: Dead rubber parameters active.")
-        st.session_state.final_home_slider = int(w_mod + home_penalty)
-        st.session_state.final_away_slider = int(w_mod + away_penalty)
-    #--- VISUAL GRAPHICS RENDER GRID ---
+        if submit_scan:
+            st.session_state.scan_executed = True
+            league_config = league_api_mapping[selected_standing_league]
+            st.session_state.scraped_standings = fetch_absolute_live_standings(league_config["id"], league_config["fallback_slug"])
+            w_mod, st.session_state.weather_message = fetch_live_weather(selected_city)
+            st.session_state.news_message = fetch_live_injury_alerts(home_team, away_team)
+            home_penalty, away_penalty = 0, 0
+            st.session_state.motivation_messages = []
+            if home_europe:
+                home_penalty -= 5
+            st.session_state.motivation_messages.append(f"⚠️ Schedule Interference Trap: {home_team} has a decisive European fixture within 72 hours.")
+            if away_europe:
+                away_penalty -= 5
+            st.session_state.motivation_messages.append(f"⚠️ Schedule Interference Trap: {away_team} has a decisive European fixture within 72 hours.")
+            if is_end_of_season:
+                home_penalty -= 10
+                away_penalty -= 10
+            st.session_state.motivation_messages.append("📉 Low Intensity Warning: Dead rubber parameters active.")
+            st.session_state.final_home_slider = int(w_mod + home_penalty)
+            st.session_state.final_away_slider = int(w_mod + away_penalty)
+    #--- VISUAL GRAPHICS RENDER MATRIX ---
     if st.session_state.scan_executed:
         st.markdown("---")
         st.subheader(f"🏆 100% Live Standings Table: {selected_standing_league}")
