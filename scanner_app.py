@@ -61,18 +61,19 @@ def fetch_absolute_live_standings(league_id, fallback_slug, season=2026):
     # 1st Priority Route: Direct Structured JSON Stream Data Channel
     try:
         slug_map = {
-            "austrian-bundesliga": "at/bundesliga",
-            "epl": "en/premier-league",
-            "german-bundesliga": "de/bundesliga",
-            "la-liga": "es/la-liga",
-            "serie-a": "it/serie-a",
-            "ligue-1": "fr/ligue-1",
-            "primeira-liga": "pt/primeira-liga",
-            "eredivisie": "nl/eredivisie"
+            "austrian-bundesliga": "https://githubusercontent.com",
+            "epl": "https://githubusercontent.com",
+            "german-bundesliga": "https://githubusercontent.com",
+            "la-liga": "https://githubusercontent.com",
+            "serie-a": "https://githubusercontent.com",
+            "ligue-1": "https://githubusercontent.com",
+            "primeira-liga": "https://githubusercontent.com",
+            "eredivisie": "https://githubusercontent.com"
         }
         if fallback_slug in slug_map:
-            target_slug = slug_map[fallback_slug]
+            target_slug = slug_map.get(fallback_slug, "at/bundesliga")
             live_endpoint = f"https://githubusercontent.com{target_slug}.json"
+
             response = requests.get(live_endpoint, timeout=5)
             if response.status_code == 200:
                 json_data = response.json()
