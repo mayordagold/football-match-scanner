@@ -50,6 +50,10 @@ away_europe = st.sidebar.checkbox(f"Does {away_team} (Away) have a European matc
 
 is_end_of_season = st.sidebar.checkbox(label="Dead Rubber Fixture?", value=False)
 
+st.sidebar.markdown("---")
+# 🟢 FIXED BUTTON ANCHOR POINT: Pinned explicitly to the sidebar block panel container layout path
+submit_scan = st.sidebar.button("🚀 Launch Deep Intelligence Scan", type="primary", use_container_width=True)
+
 # --- 🛰️ API LAYER 1: API-SPORTS LIVE STANDINGS STREAM ---
 def fetch_apisports_live_standings(league_id, season=2026):
     """
@@ -68,7 +72,7 @@ def fetch_apisports_live_standings(league_id, season=2026):
         if response.status_code == 200:
             raw_json = response.json()
             # Navigate standard response payload paths
-            standings_block = raw_json['response'][0]['league']['standings'][0]
+            standings_block = raw_json['response']['league']['standings'][0]
             
             compiled_rows = []
             for item in standings_block:
@@ -102,7 +106,6 @@ def fetch_live_market_consensus(sport_key):
         if response.status_code == 200:
             data = response.json()
             if data['success'] and len(data['data']) > 0:
-                # Extract first verified matching fixture cluster
                 return f"💰 **Live Market Feed Armed:** Connected to active sharp feeds for {sport_key} across {len(data['data'])} fixtures."
     except Exception:
         pass
@@ -165,58 +168,54 @@ if 'scan_executed' not in st.session_state:
     st.session_state.scraped_standings = pd.DataFrame()
 
 # --- TRIGGER PIPELINE RUN ---
-    if st.button("Launch Deep Intelligence Scan", type="primary"):
-        st.session_state.scan_executed = True
+if submit_scan:
+    st.session_state.scan_executed = True
     
-    # Extract targeted mapping parameters from selector dropdown config dictionary
-        league_config = league_api_mapping[selected_standing_league]
+    league_config = league_api_mapping[selected_standing_league]
+    st.session_state.scraped_standings = fetch_apisports_live_standings(league_config["id"])
+    st.session_state.odds_message = fetch_live_market_consensus(league_config["odds_sport"])
+    w_mod, st.session_state.weather_message = fetch_live_weather(selected_city)
+    st.session_state.news_message = fetch_live_injury_alerts(home_team, away_team)
     
-    # 🟢 TRIGGER RAW LIVE API CALLS (ZERO HARDCODED ROWS REMAINING)
-        st.session_state.scraped_standings = fetch_apisports_live_standings(league_config["id"])
-        st.session_state.odds_message = fetch_live_market_consensus(league_config["odds_sport"])
-        w_mod, st.session_state.weather_message = fetch_live_weather(selected_city)
-        st.session_state.news_message = fetch_live_injury_alerts(home_team, away_team)
+    home_penalty, away_penalty = 0, 0
+    st.session_state.motivation_messages = []
     
-        home_penalty, away_penalty = 0, 0
-        st.session_state.motivation_messages = []
-    
-        if home_europe:
-            home_penalty -= 5
-            st.session_state.motivation_messages.append(f"⚠️ **Schedule Interference Trap:** {home_team} has a decisive European fixture within 72 hours.")
-        if away_europe:
-            away_penalty -= 5
-            st.session_state.motivation_messages.append(f"⚠️ **Schedule Interference Trap:** {away_team} has a decisive European fixture within 72 hours.")
-        if is_end_of_season:
-            home_penalty -= 10
-            away_penalty -= 10
-            st.session_state.motivation_messages.append("📉 **Low Intensity Warning:** Dead rubber parameters active.")
+    if home_europe:
+        home_penalty -= 5
+        st.session_state.motivation_messages.append(f"⚠️ **Schedule Interference Trap:** {home_team} has a decisive European fixture within 72 hours.")
+    if away_europe:
+        away_penalty -= 5
+        st.session_state.motivation_messages.append(f"⚠️ **Schedule Interference Trap:** {away_team} has a decisive European fixture within 72 hours.")
+    if is_end_of_season:
+        home_penalty -= 10
+        away_penalty -= 10
+        st.session_state.motivation_messages.append("📉 **Low Intensity Warning:** Dead rubber parameters active.")
         
-        st.session_state.final_home_slider = int(w_mod + home_penalty)
-        st.session_state.final_away_slider = int(w_mod + away_penalty)
+    st.session_state.final_home_slider = int(w_mod + home_penalty)
+    st.session_state.final_away_slider = int(w_mod + away_penalty)
 
-# --- DYNAMIC VISUAL READING GRID ---
+    # --- DYNAMIC VISUAL READING GRID ---
     if st.session_state.scan_executed:
         st.markdown("---")
         st.subheader(f"🏆 100% Live API Standings Feed (API-Sports V3): {selected_standing_league}")
-    
     if "Error Pipeline Log" in st.session_state.scraped_standings.columns or "Error" in st.session_state.scraped_standings.columns:
         st.error("❌ LIVE DATA HANDSHAKE REJECTED BY SERVER")
         st.dataframe(st.session_state.scraped_standings, use_container_width=True, hide_index=True)
     else:
         st.dataframe(st.session_state.scraped_standings, use_container_width=True, hide_index=True)
-    st.markdown("---")
-    st.subheader(f"📋 Live Match Intelligence Readout: {home_team} vs {away_team}")
-    st.success(st.session_state.odds_message)
-    st.info(st.session_state.weather_message)
-    st.markdown(st.session_state.news_message)
-    if st.session_state.motivation_messages:
-        for msg in st.session_state.motivation_messages:
-            st.warning(msg)
-    st.markdown("---")
-    st.subheader("🎛️ Recommended Modifier Alignment Setup")
-    col1, col2 = st.columns(2)
-    col1.metric(label=f"Recommended {home_team} Performance Slider Shift", value=f"{st.session_state.final_home_slider}%")
-    col2.metric(label=f"Recommended {away_team} Performance Slider Shift", value=f"{st.session_state.final_away_slider}%")
-    st.success(f"🎯 Action Plan Checklist: Open your local dashboard (localhost:8501). Set the {home_team} Slider to {st.session_state.final_home_slider}% and the {away_team} Slider to {st.session_state.final_away_slider}%, input your live SportyBet market odds, and fire your simulation!")
+        st.markdown("---")
+        st.subheader(f"📋 Live Match Intelligence Readout: {home_team} vs {away_team}")
+        st.success(st.session_state.odds_message)
+        st.info(st.session_state.weather_message)
+        st.markdown(st.session_state.news_message)
+        if st.session_state.motivation_messages:
+            for msg in st.session_state.motivation_messages:
+                st.warning(msg)
+                st.markdown("---")
+                st.subheader("🎛️ Recommended Modifier Alignment Setup")
+                col1, col2 = st.columns(2)
+                col1.metric(label=f"Recommended {home_team} Performance Slider Shift", value=f"{st.session_state.final_home_slider}%")
+                col2.metric(label=f"Recommended {away_team} Performance Slider Shift", value=f"{st.session_state.final_away_slider}%")
+                st.success(f"🎯 Action Plan Checklist: Open your local dashboard (localhost:8501). Set the {home_team} Slider to {st.session_state.final_home_slider}% and the {away_team} Slider to {st.session_state.final_away_slider}%, input your live SportyBet market odds, and fire your simulation!")
 else:
     st.info("💡 Live Multi-API Terminal Idle: Configure the sidebar parameters and launch scan to stream live data directly from official sports database nodes.")
