@@ -47,40 +47,96 @@ submit_analysis = st.sidebar.button("🚀 Run Embedded AI Matchday Evaluation", 
 
 @st.cache_data(ttl=120)
 def fetch_live_standings_matrix(fallback_slug):
-    """Streams live table metrics safely with built-in network connection safety caps."""
-    url = f"https://fixturedownload.com{fallback_slug}-2026"
+    """
+    Hyper-Robust Live Web Scraper Layer.
+    Uses Wikipedia's live crowdsourced tables with zero key restrictions or fallbacks.
+    """
+    slug_url_map = {
+        "epl": "https://wikipedia.org",
+        "austrian-bundesliga": "https://wikipedia.org",
+        "german-bundesliga": "https://wikipedia.org",
+        "la-liga": "https://githubusercontent.com",
+        "serie-a": "https://githubusercontent.com",
+        "ligue-1": "https://githubusercontent.com",
+        "primeira-liga": "https://githubusercontent.com",
+        "eredivisie": "https://githubusercontent.com"
+    }
+    
+    url = slug_url_map.get(fallback_slug)
+    
+    # 🟢 DIRECT LIVE WEB SCRAPING MATRIX INTERFACE
+    if "wikipedia" in url:
+        try:
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+            req = requests.get(url, headers=headers, timeout=5)
+            html_tables = pd.read_html(req.text, attrs={"class": "wikitable"})
+            
+            for table in html_tables:
+                columns_str = [str(c).strip() for c in table.columns]
+                columns_lower = [c.lower() for c in columns_str]
+                
+                if any("team" in c or "club" in c for c in columns_lower):
+                    table.columns = columns_str
+                    rename_map = {}
+                    for col in table.columns:
+                        col_l = col.lower()
+                        if "pos" in col_l or "rk" in col_l or "rank" in col_l: rename_map[col] = "Rank"
+                        elif "team" in col_l or "club" in col_l: rename_map[col] = "Club"
+                        elif col_l in ["pld", "mp", "g", "p"]: rename_map[col] = "MP"
+                        elif col_l == "w": rename_map[col] = "W"
+                        elif col_l == "d": rename_map[col] = "D"
+                        elif col_l == "l": rename_map[col] = "L"
+                        elif col_l in ["gf", "f"]: rename_map[col] = "GF"
+                        elif col_l in ["ga", "a"]: rename_map[col] = "GA"
+                        elif col_l in ["gd", "diff", "gdr"]: rename_map[col] = "GD"
+                        elif "pts" in col_l or "points" in col_l: rename_map[col] = "Pts"
+                    
+                    table = table.rename(columns=rename_map)
+                    if "Club" in table.columns:
+                        if "Rank" not in table.columns:
+                            table.insert(0, "Rank", range(1, len(table) + 1))
+                        
+                        # Clean text decorations like "(C)" or "(R)" out of club names dynamically
+                        table["Club"] = table["Club"].str.replace(r"\(.*\)", "", regex=True).str.strip()
+                        
+                        # Clean out citation marks like [a] from the text data strings
+                        table["Club"] = table["Club"].str.replace(r"\[.*\]", "", regex=True).str.strip()
+                        
+                        required_display = ["Rank", "Club", "MP", "W", "D", "L", "GF", "GA", "GD", "Pts"]
+                        existing_display = [c for c in required_display if c in table.columns]
+                        
+                        # Harmonize string types to absolute integers to prevent sorting errors
+                        df_clean = table[existing_display].copy()
+                        for field in ["Rank", "MP", "W", "D", "L", "GF", "GA", "GD", "Pts"]:
+                            if field in df_clean.columns:
+                                df_clean[field] = pd.to_numeric(df_clean[field], errors='coerce').fillna(0).astype(int)
+                                
+                        return df_clean.sort_values(by=["Pts", "GD"], ascending=False).reset_index(drop=True)
+        except Exception:
+            pass
+
+    # Direct secondary path for alternative repository streams
     try:
         response = requests.get(url, timeout=4)
         if response.status_code == 200:
-            fixtures = response.json()
-            table = {}
-            for f in fixtures:
-                if f.get('HomeTeamScore') is not None and f.get('AwayTeamScore') is not None:
-                    h, a = f['HomeTeam'], f['AwayTeam']
-                    hs, as_ = int(f['HomeTeamScore']), int(f['AwayTeamScore'])
-                    for t in [h, a]:
-                        if t not in table: table[t] = {"MP": 0, "W": 0, "D": 0, "L": 0, "GF": 0, "GA": 0, "Pts": 0}
-                    table[h]["MP"] += 1; table[a]["MP"] += 1; table[h]["GF"] += hs; table[h]["GA"] += as_; table[a]["GF"] += as_; table[a]["GA"] += hs
-                    if hs > as_: table[h]["W"] += 1; table[h]["Pts"] += 3; table[a]["L"] += 1
-                    elif hs == as_: table[h]["D"] += 1; table[h]["Pts"] += 1; table[a]["D"] += 1; table[a]["Pts"] += 1
-                    else: table[a]["W"] += 1; table[a]["Pts"] += 3; table[h]["L"] += 1
-            df_list = [{"Club": k, "MP": v["MP"], "W": v["W"], "D": v["D"], "L": v["L"], "GF": v["GF"], "GA": v["GA"], "GD": v["GF"] - v["GA"], "Pts": v["Pts"]} for k, v in table.items()]
-            res_df = pd.DataFrame(df_list).sort_values(by=["Pts", "GD"], ascending=False).reset_index(drop=True)
-            res_df.insert(0, "Rank", range(1, len(res_df) + 1))
-            return res_df
-    except Exception: 
+            json_data = response.json()
+            standings_list = json_data.get('standings', [])
+            compiled_rows = []
+            for idx, row in enumerate(standings_list):
+                compiled_rows.append({
+                    "Rank": idx + 1, "Club": row.get('team', {}).get('name', 'Unknown'),
+                    "MP": row.get('played', 0), "W": row.get('won', 0), "D": row.get('drawn', 0),
+                    "L": row.get('lost', 0), "GF": row.get('goals_for', 0), "GA": row.get('goals_against', 0),
+                    "GD": row.get('goals_difference', 0), "Pts": row.get('points', 0)
+                })
+            if compiled_rows:
+                return pd.DataFrame(compiled_rows)
+    except Exception:
         pass
 
-    # Real-World Dynamic In-Play Baseline Fallback Grid if server times out
-    fallback_rows = [
-        {"Rank": 1, "Club": "Man City", "MP": 5, "W": 5, "D": 0, "L": 0, "GF": 13, "GA": 5, "GD": 8, "Pts": 15},
-        {"Rank": 2, "Club": "Arsenal", "MP": 5, "W": 4, "D": 0, "L": 1, "GF": 8, "GA": 4, "GD": 4, "Pts": 12},
-        {"Rank": 5, "Club": "Leeds", "MP": 5, "W": 2, "D": 3, "L": 0, "GF": 7, "GA": 3, "GD": 4, "Pts": 9},
-        {"Rank": 6, "Club": "Liverpool", "MP": 5, "W": 2, "D": 3, "L": 0, "GF": 7, "GA": 4, "GD": 3, "Pts": 9},
-        {"Rank": 8, "Club": "Grazer AK", "MP": 7, "W": 2, "D": 2, "L": 3, "GF": 6, "GA": 16, "GD": -10, "Pts": 8},
-        {"Rank": 12, "Club": "Salzburg", "MP": 7, "W": 5, "D": 2, "L": 0, "GF": 18, "GA": 4, "GD": 14, "Pts": 17}
-    ]
-    return pd.DataFrame(fallback_rows)
+    # Clean fallback warning framework to avoid mixing up team leagues
+    return pd.DataFrame([{"Rank": 1, "Club": "Awaiting Live Stream Initialization...", "MP": 0, "W": 0, "D": 0, "L": 0, "GF": 0, "GA": 0, "GD": 0, "Pts": 0}])
+
 
 @st.cache_data(ttl=120)
 def fetch_live_news_and_injuries(home, away):
