@@ -147,6 +147,11 @@ if st.button("Launch Deep Intelligence Scan", type="primary"):
     if away_europe:
         away_penalty -= 5
         st.session_state.motivation_messages.append(f"⚠️ **Schedule Interference Trap:** {away_team} has a massive European match in 72 hours. Expect tactical rotation.")
+        
+    # FORCE CALIBRATION CORRECTION INTO STORAGE
+    st.session_state.final_home_slider = max(-10, min(10, w_mod + home_penalty))
+    st.session_state.final_away_slider = max(-10, min(10, w_mod + away_penalty))
+
     if is_end_of_season:
         home_penalty -= 10
         away_penalty -= 10
