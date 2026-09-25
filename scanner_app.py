@@ -54,15 +54,12 @@ st.sidebar.markdown("---")
 submit_scan = st.sidebar.button("🚀 Launch Deep Intelligence Scan", type="primary", use_container_width=True)
 
 # --- 🛰️ API LAYER 1: ALLSPORTSAPI LIVE STANDINGS CORE ---
-def fetch_allsportsapi_live_standings(league_id, fallback_slug, season="2026/2027"):
+def fetch_allsportsapi_live_standings(league_id, fallback_slug):
     """
-    Connects directly to the AllSportsApi REST servers.
-    Parses active multi-stage league tables cleanly using your new credentials.
+    Connects directly to AllSportsApi REST servers.
+    Safely handles dictionary variations using get() with strict fallbacks.
     """
-    url = "https://allosportsapi.com"
-    # Alternative direct sub-domain fallback route endpoint configuration
     url = "https://allsportsapi.com"
-    
     params = {
         'met': 'Standings',
         'leagueId': league_id,
@@ -73,31 +70,38 @@ def fetch_allsportsapi_live_standings(league_id, fallback_slug, season="2026/202
         response = requests.get(url, params=params, timeout=6)
         if response.status_code == 200:
             raw_json = response.json()
+            result_node = raw_json.get('result', {})
             
-            # Extract list results from data nodes
-            standings_block = raw_json.get('result', {}).get('total', [])
-            
-            # If the platform API endpoint structure returns empty array responses, skip to failover stream
-            if not standings_block and 'result' in raw_json and isinstance(raw_json['result'], list):
-                standings_block = raw_json['result']
+            # AllSportsApi can return standings inside a nested 'total' list or directly as a flat list
+            standings_block = []
+            if isinstance(result_node, dict):
+                standings_block = result_node.get('total', [])
+            elif isinstance(result_node, list):
+                standings_block = result_node
                 
             compiled_rows = []
             for item in standings_block:
+                if not isinstance(item, dict):
+                    continue
                 compiled_rows.append({
                     "Rank": item.get('standing_place', item.get('position', 0)),
                     "Club": item.get('standing_team', item.get('team_name', 'Unknown Team')),
-                    "MP": item.get('standing_P', 0),
-                    "W": item.get('standing_W', 0),
-                    "D": item.get('standing_D', 0),
-                    "L": item.get('standing_L', 0),
-                    "GF": item.get('standing_F', 0),
-                    "GA": item.get('standing_A', 0),
-                    "GD": item.get('standing_GD', 0),
-                    "Pts": item.get('standing_PTS', 0)
+                    "MP": item.get('standing_P', item.get('standing_p', 0)),
+                    "W": item.get('standing_W', item.get('standing_w', 0)),
+                    "D": item.get('standing_D', item.get('standing_d', 0)),
+                    "L": item.get('standing_L', item.get('standing_l', 0)),
+                    "GF": item.get('standing_F', item.get('standing_f', 0)),
+                    "GA": item.get('standing_A', item.get('standing_a', 0)),
+                    "GD": item.get('standing_GD', item.get('standing_gd', 0)),
+                    "Pts": item.get('standing_PTS', item.get('standing_pts', 0))
                 })
+                
             if compiled_rows:
                 df_res = pd.DataFrame(compiled_rows)
-                # Ensure correct sorting hierarchy natively
+                # Safeguard against string/object typing in numerical fields before sorting
+                for col in ["Pts", "GD", "Rank"]:
+                    if col in df_res.columns:
+                        df_res[col] = pd.to_numeric(df_res[col], errors='coerce').fillna(0).astype(int)
                 df_res = df_res.sort_values(by=["Pts", "GD"], ascending=False).reset_index(drop=True)
                 df_res["Rank"] = range(1, len(df_res) + 1)
                 return df_res
@@ -173,45 +177,45 @@ def fetch_live_injury_alerts(home, away):
             if home.lower() in feed_text and any(w in feed_text for w in ["injury", "injured", "absent", "rested", "suspended"]):
                 alerts.append(f"📰 **Live Injury Stream:** Potential lineup limits scanned for {home}.")
             if away.lower() in feed_text and any(w in feed_text for w in ["injury", "injured", "absent", "rested", "suspended"]):
-                alerts.append(f"📰 **Live Injury Stream:** Potential lineup limits scanned for {away}.")
-        if not alerts:
-            alerts.append("✨ **Live Injury Stream:** Squad selection matrices stable. No high-volatility anomalies found.")
-        return " | ".join(alerts)
+                alerts.append(f"📰 Live Injury Stream: Potential lineup limits scanned for {away}.")
+                if not alerts:
+                    alerts.append("✨ Live Injury Stream: Squad selection matrices stable. No high-volatility anomalies found.")
+                    return " | ".join(alerts)
     except Exception:
         return "📡 Injury Stream: RSS pipeline stable and monitoring data feeds."
-    # --- INITIALIZE SESSION STATE MEMORY HOOKS ---
     
-        if 'scan_executed' not in st.session_state:
-            st.session_state.scan_executed = False
-            st.session_state.final_home_slider = 0
-            st.session_state.final_away_slider = 0
-            st.session_state.weather_message = ""
-            st.session_state.news_message = ""
-            st.session_state.motivation_messages = []
-            st.session_state.scraped_standings = pd.DataFrame()
-    #--- TRIGGER EXECUTION FLOW PIPELINE ---
-        
-        if submit_scan:
-            st.session_state.scan_executed = Trueleague_config = league_api_mapping[selected_standing_league]
-    # Triggers the new AllSportsApi structured pipeline loop seamlessly
-            st.session_state.scraped_standings = fetch_allsportsapi_live_standings(league_config["id"], league_config["fallback_slug"])
-            w_mod, st.session_state.weather_message = fetch_live_weather(selected_city)
-            st.session_state.news_message = fetch_live_injury_alerts(home_team, away_team)
-            home_penalty, away_penalty = 0, 0
-            st.session_state.motivation_messages = []
-            if home_europe:
-                home_penalty -= 5
-                st.session_state.motivation_messages.append(f"⚠️ Schedule Interference Trap: {home_team} has a decisive European fixture within 72 hours.")
-                if away_europe:
-                    away_penalty -= 5
-                    st.session_state.motivation_messages.append(f"⚠️ Schedule Interference Trap: {away_team} has a decisive European fixture within 72 hours.")
-                if is_end_of_season:
-                    home_penalty -= 10
-                    away_penalty -= 10
-                    st.session_state.motivation_messages.append("📉 Low Intensity Warning: Dead rubber parameters active.")
-            st.session_state.final_home_slider = int(w_mod + home_penalty)
-            st.session_state.final_away_slider = int(w_mod + away_penalty)
-    # --- VISUAL GRAPHICS RENDER MATRIX ---
+   # --- INITIALIZE SESSION STATE MEMORY HOOKS ---
+    
+    if 'scan_executed' not in st.session_state:
+        st.session_state.scan_executed = False
+        st.session_state.final_home_slider = 0
+        st.session_state.final_away_slider = 0
+        st.session_state.weather_message = ""
+        st.session_state.news_message = ""
+        st.session_state.motivation_messages = []
+        st.session_state.scraped_standings = pd.DataFrame()
+   # --- TRIGGER EXECUTION FLOW PIPELINE ---
+    if submit_scan:
+        st.session_state.scan_executed = True
+        league_config = league_api_mapping[selected_standing_league]
+        st.session_state.scraped_standings = fetch_allsportsapi_live_standings(league_config["id"], league_config["fallback_slug"])
+        w_mod, st.session_state.weather_message = fetch_live_weather(selected_city)
+        st.session_state.news_message = fetch_live_injury_alerts(home_team, away_team)
+        home_penalty, away_penalty = 0, 0
+        st.session_state.motivation_messages = []
+        if home_europe:
+            home_penalty -= 5
+            st.session_state.motivation_messages.append(f"⚠️ Schedule Interference Trap: {home_team} has a decisive European fixture within 72 hours.")
+        if away_europe:
+            away_penalty -= 5
+            st.session_state.motivation_messages.append(f"⚠️ Schedule Interference Trap: {away_team} has a decisive European fixture within 72 hours.")
+        if is_end_of_season:
+            home_penalty -= 10
+            away_penalty -= 10
+            st.session_state.motivation_messages.append("📉 Low Intensity Warning: Dead rubber parameters active.")
+        st.session_state.final_home_slider = int(w_mod + home_penalty)
+        st.session_state.final_away_slider = int(w_mod + away_penalty)
+   # --- VISUAL GRAPHICS RENDER MATRIX ---
     if st.session_state.scan_executed:
         st.markdown("---")
         st.subheader(f"🏆 100% Live Standings Table (AllSportsApi): {selected_standing_league}")
