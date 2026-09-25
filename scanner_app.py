@@ -18,7 +18,6 @@ THEODDSAPI_KEY = "a880fb62e16f9aff604a782c9e6c1c89"
 # --- SIDEBAR CONTROL PANEL CONFIGURATION ---
 st.sidebar.title("🔍 Target Matchup Profile")
 
-# Primary Input Matrix Controls
 home_team = st.sidebar.text_input("Home Team Name", value="Grazer AK")
 away_team = st.sidebar.text_input("Away Team Name", value="Salzburg")
 
@@ -31,14 +30,14 @@ selected_city = st.sidebar.selectbox("Match City Location (For Weather)", city_o
 
 # API-Sports League IDs Matrix mapping your exact football database frames
 league_api_mapping = {
-    "🇦🇹 Austria Football Bundesliga": {"id": 218, "odds_sport": "soccer_austria_bundesliga"},
-    "🏴󠁧󠁢󠁥󠁮󠁧󠁿 English Premier League": {"id": 39, "odds_sport": "soccer_epl"},
-    "🇩🇪 German Bundesliga": {"id": 78, "odds_sport": "soccer_germany_bundesliga"},
-    "🇪🇸 Spanish La Liga": {"id": 140, "odds_sport": "soccer_spain_la_liga"},
-    "🇮🇹 Italy Serie A": {"id": 135, "odds_sport": "soccer_italy_serie_a"},
-    "🇫🇷 France Ligue 1": {"id": 61, "odds_sport": "soccer_france_ligue_1"},
-    "🇵🇹 Portugal Primeira Liga": {"id": 94, "odds_sport": "soccer_portugal_primeira_liga"},
-    "🇳🇱 Netherlands Eredivisie": {"id": 88, "odds_sport": "soccer_netherlands_eredivisie"}
+    "🇦🇹 Austria Football Bundesliga": {"id": 218, "odds_sport": "soccer_austria_bundesliga", "fallback_slug": "austrian-bundesliga"},
+    "🏴\u200d󠁧󠁢󠁥󠁮󠁧󠁿 English Premier League": {"id": 39, "odds_sport": "soccer_epl", "fallback_slug": "epl"},
+    "🇩🇪 German Bundesliga": {"id": 78, "odds_sport": "soccer_germany_bundesliga", "fallback_slug": "german-bundesliga"},
+    "🇪🇸 Spanish La Liga": {"id": 140, "odds_sport": "soccer_spain_la_liga", "fallback_slug": "la-liga"},
+    "🇮🇹 Italy Serie A": {"id": 135, "odds_sport": "soccer_italy_serie_a", "fallback_slug": "serie-a"},
+    "🇫🇷 France Ligue 1": {"id": 61, "odds_sport": "soccer_france_ligue_1", "fallback_slug": "ligue-1"},
+    "🇵🇹 Portugal Primeira Liga": {"id": 94, "odds_sport": "soccer_portugal_primeira_liga", "fallback_slug": "primeira-liga"},
+    "🇳🇱 Netherlands Eredivisie": {"id": 88, "odds_sport": "soccer_netherlands_eredivisie", "fallback_slug": "eredivisie"}
 }
 selected_standing_league = st.sidebar.selectbox("Load Live League Standings Display", list(league_api_mapping.keys()))
 
@@ -51,16 +50,10 @@ away_europe = st.sidebar.checkbox(f"Does {away_team} (Away) have a European matc
 is_end_of_season = st.sidebar.checkbox(label="Dead Rubber Fixture?", value=False)
 
 st.sidebar.markdown("---")
-# 🟢 FIXED BUTTON ANCHOR POINT: Pinned explicitly to the sidebar block panel container layout path
 submit_scan = st.sidebar.button("🚀 Launch Deep Intelligence Scan", type="primary", use_container_width=True)
 
-# --- 🛰️ API LAYER 1: API-SPORTS LIVE STANDINGS STREAM ---
-# 🟢 CORRECTED SEASON MAPPER PARAMETER 
-def fetch_apisports_live_standings(league_id, season=2026):
-    """
-    Connects to API-Sports V3 with automated fail-over.
-    Redirects data streams instantly if an API endpoint restriction occurs.
-    """
+# --- 🛰️ API LAYER 1: API-SPORTS LIVE STANDINGS WITH LIVE FALLBACK RE-ROUTING ---
+def fetch_apisports_live_standings(league_id, fallback_slug, season=2026):
     url = "https://api-sports.io"
     headers = {
         'x-rapidapi-key': APISPORTS_KEY,
@@ -69,13 +62,14 @@ def fetch_apisports_live_standings(league_id, season=2026):
     params = {'league': league_id, 'season': season}
     
     try:
-        response = requests.get(url, headers=headers, params=params, timeout=6)
+        response = requests.get(url, headers=headers, params=params, timeout=5)
         if response.status_code == 200:
             raw_json = response.json()
-            # If the free tier key has a restriction, activate the live JSON stream
-            if not raw_json.get('response') or 'errors' in raw_json and raw_json['errors']:
-                raise ValueError("Endpoint restricted on free trial key.")
+            # If the server returned plan restriction errors, skip to the dynamic failover stream
+            if raw_json.get('errors') or not raw_json.get('response'):
+                raise ValueError("Plan restriction detected.")
                 
+            # If successful, parse standard path
             standings_block = raw_json['response'][0]['league']['standings'][0]
             compiled_rows = []
             for item in standings_block:
@@ -94,51 +88,39 @@ def fetch_apisports_live_standings(league_id, season=2026):
             return pd.DataFrame(compiled_rows)
             
     except Exception:
-        # ⚡ LIVE FAIL-OVER: Streams 100% authentic live data from an open backup sports feed
+        # ⚡ LIVE FAILOVER GATEWAY: Reverse-engineers live standings using unblocked public text streams
         try:
-            fallback_url = "https://fixturedownload.com" if league_id == 218 else "https://fixturedownload.com"
+            fallback_url = f"https://fixturedownload.com{fallback_slug}-{season}"
             f_resp = requests.get(fallback_url, timeout=5)
             if f_resp.status_code == 200:
                 fixtures = f_resp.json()
                 table = {}
                 for f in fixtures:
-                    if f.get('HomeTeamScore') is not None:
+                    if f.get('HomeTeamScore') is not None and f.get('AwayTeamScore') is not None:
                         h, a = f['HomeTeam'], f['AwayTeam']
                         hs, as_ = int(f['HomeTeamScore']), int(f['AwayTeamScore'])
                         for t in [h, a]:
-                            if t not in table: table[t] = {"MP":0,"W":0,"D":0,"L":0,"GF":0,"GA":0,"Pts":0}
-                        table[h]["MP"]+=1; table[a]["MP"]+=1; table[h]["GF"]+=hs; table[h]["GA"]+=as_; table[a]["GF"]+=as_; table[a]["GA"]+=hs
-                        if hs > as_: table[h]["W"]+=1; table[h]["Pts"]+=3; table[a]["L"]+=1
-                        elif hs == as_: table[h]["D"]+=1; table[h]["Pts"]+=1; table[a]["D"]+=1; table[a]["Pts"]+=1
-                        else: table[a]["W"]+=1; table[a]["Pts"]+=3; table[h]["L"]+=1
-                df_list = [{"Club":k,"MP":v["MP"],"W":v["W"],"D":v["D"],"L":v["L"],"GF":v["GF"],"GA":v["GA"],"GD":v["GF"]-v["GA"],"Pts":v["Pts"]} for k,v in table.items()]
-                res_df = pd.DataFrame(df_list).sort_values(by=["Pts","GD"], ascending=False).reset_index(drop=True)
+                            if t not in table: 
+                                table[t] = {"MP": 0, "W": 0, "D": 0, "L": 0, "GF": 0, "GA": 0, "Pts": 0}
+                        table[h]["MP"] += 1; table[a]["MP"] += 1; table[h]["GF"] += hs; table[h]["GA"] += as_; table[a]["GF"] += as_; table[a]["GA"] += hs
+                        if hs > as_: 
+                            table[h]["W"] += 1; table[h]["Pts"] += 3; table[a]["L"] += 1
+                        elif hs == as_: 
+                            table[h]["D"] += 1; table[h]["Pts"] += 1; table[a]["D"] += 1; table[a]["Pts"] += 1
+                        else: 
+                            table[a]["W"] += 1; table[a]["Pts"] += 3; table[h]["L"] += 1
+                
+                df_list = [{"Club": k, "MP": v["MP"], "W": v["W"], "D": v["D"], "L": v["L"], "GF": v["GF"], "GA": v["GA"], "GD": v["GF"] - v["GA"], "Pts": v["Pts"]} for k, v in table.items()]
+                res_df = pd.DataFrame(df_list).sort_values(by=["Pts", "GD"], ascending=False).reset_index(drop=True)
                 res_df.insert(0, "Rank", range(1, len(res_df) + 1))
                 return res_df
         except Exception:
             pass
             
-    return pd.DataFrame({"Error Pipeline Log": ["Live server handshake rejected. Check API token balance details."]})\
+    return pd.DataFrame({"Error Pipeline Log": ["All primary and secondary live streams are closed. Verify web connection details."]})
 
 
-# --- 🛰️ API LAYER 2: THE-ODDS-API LIVE CONSENSUS SCANNER ---
-def fetch_live_market_consensus(sport_key):
-    """
-    Connects directly to the-odds-api core servers.
-    Grabs global sharp bookmaker pre-match market anchors.
-    """
-    url = f"https://the-odds-api.com{THEODDSAPI_KEY}&sport={sport_key}&region=eu&mkt=h2h"
-    try:
-        response = requests.get(url, timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            if data['success'] and len(data['data']) > 0:
-                return f"💰 **Live Market Feed Armed:** Connected to active sharp feeds for {sport_key} across {len(data['data'])} fixtures."
-    except Exception:
-        pass
-    return "⚠️ Market Feed Stream: Node busy or league out-of-season cycle. Manual entry active."
-
-# --- 🌤️ API LAYER 3: OPEN-METEO WEATHER API ---
+# --- 🌤️ LIVE API LAYER 2: OPEN-METEO WEATHER API ---
 def fetch_live_weather(city_name):
     geo_coordinates = {
         "Graz": (47.07, 15.43), "Salzburg": (47.80, 13.04), "Dortmund": (51.51, 7.46),
@@ -164,7 +146,7 @@ def fetch_live_weather(city_name):
     except Exception:
         return 0, "⚠️ Weather API Stream: Server busy. Modifier untouched (0%)."
 
-# --- 📰 API LAYER 4: GOOGLE NEWS TEAM NEWS LOOP ---
+# --- 📰 LIVE API LAYER 3: GOOGLE NEWS TEAM NEWS LOOP ---
 def fetch_live_injury_alerts(home, away):
     alerts = []
     try:
@@ -190,7 +172,6 @@ if 'scan_executed' not in st.session_state:
     st.session_state.final_away_slider = 0
     st.session_state.weather_message = ""
     st.session_state.news_message = ""
-    st.session_state.odds_message = ""
     st.session_state.motivation_messages = []
     st.session_state.scraped_standings = pd.DataFrame()
 
@@ -199,50 +180,45 @@ if submit_scan:
     st.session_state.scan_executed = True
     
     league_config = league_api_mapping[selected_standing_league]
-    st.session_state.scraped_standings = fetch_apisports_live_standings(league_config["id"], season=2026)
-    st.session_state.odds_message = fetch_live_market_consensus(league_config["odds_sport"])
+    # Pass both parameters to ensure seamless live failover routing
+    st.session_state.scraped_standings = fetch_apisports_live_standings(league_config["id"], league_config["fallback_slug"])
     w_mod, st.session_state.weather_message = fetch_live_weather(selected_city)
     st.session_state.news_message = fetch_live_injury_alerts(home_team, away_team)
-    
     home_penalty, away_penalty = 0, 0
     st.session_state.motivation_messages = []
-    
     if home_europe:
         home_penalty -= 5
-        st.session_state.motivation_messages.append(f"⚠️ **Schedule Interference Trap:** {home_team} has a decisive European fixture within 72 hours.")
+        st.session_state.motivation_messages.append(f"⚠️ Schedule Interference Trap: {home_team} has a decisive European fixture within 72 hours.")
     if away_europe:
         away_penalty -= 5
-        st.session_state.motivation_messages.append(f"⚠️ **Schedule Interference Trap:** {away_team} has a decisive European fixture within 72 hours.")
+        st.session_state.motivation_messages.append(f"⚠️ Schedule Interference Trap: {away_team} has a decisive European fixture within 72 hours.")
     if is_end_of_season:
         home_penalty -= 10
         away_penalty -= 10
-        st.session_state.motivation_messages.append("📉 **Low Intensity Warning:** Dead rubber parameters active.")
-        
+        st.session_state.motivation_messages.append("📉 Low Intensity Warning: Dead rubber parameters active.")
     st.session_state.final_home_slider = int(w_mod + home_penalty)
     st.session_state.final_away_slider = int(w_mod + away_penalty)
-
-    # --- DYNAMIC VISUAL READING GRID ---
+    #--- DYNAMIC VISUAL READING GRID ---
     if st.session_state.scan_executed:
         st.markdown("---")
-        st.subheader(f"🏆 100% Live API Standings Feed (API-Sports V3): {selected_standing_league}")
-    if "Error Pipeline Log" in st.session_state.scraped_standings.columns or "Error" in st.session_state.scraped_standings.columns:
-        st.error("❌ LIVE DATA HANDSHAKE REJECTED BY SERVER")
-        st.dataframe(st.session_state.scraped_standings, use_container_width=True, hide_index=True)
-    else:
-        st.dataframe(st.session_state.scraped_standings, use_container_width=True, hide_index=True)
+        st.subheader(f"🏆 100% Live Standings Feed: {selected_standing_league}")
+        if "Error Pipeline Log" in st.session_state.scraped_standings.columns:
+            st.error("❌ LIVE DATA HANDSHAKE REJECTED BY SERVER")
+            st.dataframe(st.session_state.scraped_standings, use_container_width=True, hide_index=True)
+        else:
+            st.dataframe(st.session_state.scraped_standings, use_container_width=True, hide_index=True)
         st.markdown("---")
         st.subheader(f"📋 Live Match Intelligence Readout: {home_team} vs {away_team}")
-        st.success(st.session_state.odds_message)
         st.info(st.session_state.weather_message)
         st.markdown(st.session_state.news_message)
         if st.session_state.motivation_messages:
             for msg in st.session_state.motivation_messages:
                 st.warning(msg)
-                st.markdown("---")
-                st.subheader("🎛️ Recommended Modifier Alignment Setup")
-                col1, col2 = st.columns(2)
-                col1.metric(label=f"Recommended {home_team} Performance Slider Shift", value=f"{st.session_state.final_home_slider}%")
-                col2.metric(label=f"Recommended {away_team} Performance Slider Shift", value=f"{st.session_state.final_away_slider}%")
-                st.success(f"🎯 Action Plan Checklist: Open your local dashboard (localhost:8501). Set the {home_team} Slider to {st.session_state.final_home_slider}% and the {away_team} Slider to {st.session_state.final_away_slider}%, input your live SportyBet market odds, and fire your simulation!")
-else:
-    st.info("💡 Live Multi-API Terminal Idle: Configure the sidebar parameters and launch scan to stream live data directly from official sports database nodes.")
+        st.markdown("---")
+        st.subheader("🎛️ Recommended Modifier Alignment Setup")
+        col1, col2 = st.columns(2)
+        col1.metric(label=f"Recommended {home_team} Performance Slider Shift", value=f"{st.session_state.final_home_slider}%")
+        col2.metric(label=f"Recommended {away_team} Performance Slider Shift", value=f"{st.session_state.final_away_slider}%")
+        st.success(f"🎯 Action Plan Checklist: Open your local dashboard (localhost:8501). Set the {home_team} Slider to {st.session_state.final_home_slider}% and the {away_team} Slider to {st.session_state.final_away_slider}%, input your live SportyBet market odds, and fire your simulation!")
+    else:
+        st.info("💡 Live Multi-API Terminal Idle: Configure the sidebar parameters and launch scan to stream live data directly from official sports database nodes.")
