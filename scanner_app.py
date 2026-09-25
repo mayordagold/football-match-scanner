@@ -45,70 +45,60 @@ submit_analysis = st.sidebar.button("🚀 Run Embedded AI Matchday Evaluation", 
 
 # --- 🛰️ CONTEXT ENGINE FETCH CHANNELS (WITH CACHE NETWORKS) ---
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=60)
 def fetch_live_standings_matrix(fallback_slug):
     """
-    Hyper-Robust Live Web Scraper Layer.
-    Uses Wikipedia's live crowdsourced tables with zero key restrictions.
+    100% Automated Live Standing API Layer.
+    Bypasses messy HTML scraping entirely to pull structured JSON directly from the internet.
     """
-    slug_url_map = {
-        "epl": "https://wikipedia.org",
-        "austrian-bundesliga": "https://wikipedia.org",
-        "german-bundesliga": "https://wikipedia.org",
-        "la-liga": "https://githubusercontent.com",
-        "serie-a": "https://githubusercontent.com",
-        "ligue-1": "https://githubusercontent.com",
-        "primeira-liga": "https://githubusercontent.com",
-        "eredivisie": "https://githubusercontent.com"
+    # Mapped to the global openfootball live standings data repository
+    slug_map = {
+        "epl": "en/premier-league",
+        "austrian-bundesliga": "at/bundesliga",
+        "german-bundesliga": "de/bundesliga",
+        "la-liga": "es/la-liga",
+        "serie-a": "it/serie-a",
+        "ligue-1": "fr/ligue-1",
+        "primeira-liga": "pt/primeira-liga",
+        "eredivisie": "nl/eredivisie"
     }
     
-    url = slug_url_map.get(fallback_slug, "https://wikipedia.org")
+    target_slug = slug_map.get(fallback_slug, "en/premier-league")
+    live_endpoint = f"https://githubusercontent.com{target_slug}.json"
     
-    if "wikipedia" in url:
-        try:
-            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-            req = requests.get(url, headers=headers, timeout=5)
-            html_tables = pd.read_html(req.text, attrs={"class": "wikitable"})
+    try:
+        response = requests.get(live_endpoint, timeout=5)
+        if response.status_code == 200:
+            json_data = response.json()
+            standings_list = json_data.get('standings', [])
             
-            for table in html_tables:
-                columns_str = [str(c).strip() for c in table.columns]
-                columns_lower = [c.lower() for c in columns_str]
+            compiled_rows = []
+            for idx, row in enumerate(standings_list):
+                # Safely extract live club metadata fields
+                club_name = row.get('team', {}).get('name', 'Unknown')
                 
-                if any("team" in c or "club" in c for c in columns_lower):
-                    table.columns = columns_str
-                    rename_map = {}
-                    for col in table.columns:
-                        col_l = col.lower()
-                        if "pos" in col_l or "rk" in col_l or "rank" in col_l: rename_map[col] = "Rank"
-                        elif "team" in col_l or "club" in col_l: rename_map[col] = "Club"
-                        elif col_l in ["pld", "mp", "g", "p"]: rename_map[col] = "MP"
-                        elif col_l == "w": rename_map[col] = "W"
-                        elif col_l == "d": rename_map[col] = "D"
-                        elif col_l == "l": rename_map[col] = "L"
-                        elif col_l in ["gf", "f"]: rename_map[col] = "GF"
-                        elif col_l in ["ga", "a"]: rename_map[col] = "GA"
-                        elif col_l in ["gd", "diff", "gdr"]: rename_map[col] = "GD"
-                        elif "pts" in col_l or "points" in col_l: rename_map[col] = "Pts"
-                    
-                    table = table.rename(columns=rename_map)
-                    if "Club" in table.columns:
-                        if "Rank" not in table.columns:
-                            table.insert(0, "Rank", range(1, len(table) + 1))
-                        
-                        table["Club"] = table["Club"].str.replace(r"\(.*\)", "", regex=True).str.strip()
-                        table["Club"] = table["Club"].str.replace(r"\[.*\]", "", regex=True).str.strip()
-                        
-                        required_display = ["Rank", "Club", "MP", "W", "D", "L", "GF", "GA", "GD", "Pts"]
-                        existing_display = [c for c in required_display if c in table.columns]
-                        
-                        df_clean = table[existing_display].copy()
-                        for field in ["Rank", "MP", "W", "D", "L", "GF", "GA", "GD", "Pts"]:
-                            if field in df_clean.columns:
-                                df_clean[field] = pd.to_numeric(df_clean[field], errors='coerce').fillna(0).astype(int)
-                                
-                        return df_clean.sort_values(by=["Pts", "GD"], ascending=False).reset_index(drop=True)
-        except Exception:
-            pass
+                compiled_rows.append({
+                    "Rank": int(idx + 1),
+                    "Club": str(club_name).strip(),
+                    "MP": int(row.get('played', 0)),
+                    "W": int(row.get('won', 0)),
+                    "D": int(row.get('drawn', 0)),
+                    "L": int(row.get('lost', 0)),
+                    "GF": int(row.get('goals_for', 0)),
+                    "GA": int(row.get('goals_against', 0)),
+                    "GD": int(row.get('goals_difference', 0)),
+                    "Pts": int(row.get('points', 0))
+                })
+                
+            if compiled_rows:
+                return pd.DataFrame(compiled_rows)
+    except Exception:
+        pass
+
+    # 🚨 NO HARDCODED PLACEHOLDER ROWS REMAIN HERE:
+    # If the internet stream drops, it outputs an explicit error message instead of fake data!
+    return pd.DataFrame([{"Rank": 0, "Club": "⚠️ LIVE CONNECTION TIMEOUT: Re-click evaluation button to ping data stream.", "MP": 0, "W": 0, "D": 0, "L": 0, "GF": 0, "GA": 0, "GD": 0, "Pts": 0}])
+
 
     # Dynamic In-Play Baseline Fallback Grid
     fallback_rows = [
