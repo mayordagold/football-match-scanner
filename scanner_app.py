@@ -186,3 +186,4 @@ if st.session_state.analysis_fired:
     with col_layout1:
         st.markdown("##### 🩺 Injury & Selection News Feed")
         for alert in st.session_state.news_alerts:
+            if "🚨" in alert: st.error(alert)else: st.success(alert)with col_layout2:st.markdown("##### 🛠️ Tactical Formation Modifications")if home_formation_change: st.warning(f"🔄 {home_team} Override: Structural formation alteration reported.")if away_formation_change: st.warning(f"🔄 {away_team} Override: Structural formation alteration reported.")if not home_formation_change and not away_formation_change:st.success("📐 Tactical Balance Stable: Standard layout profiles maintained.")else:st.info("💡 Context Dashboard Idle: Select your target league division and matchup clubs in the sidebar control panel, then click '🚀 Execute Autonomous AI Plugin Evaluation' to stream raw metrics to the free Llama 3 processor node.")
