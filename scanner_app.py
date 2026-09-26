@@ -3,19 +3,22 @@ import requests
 import pandas as pd
 
 st.set_page_config(
-    page_title="AI Matchday Plugin Terminal", 
+    page_title="Gemini AI Matchday Plugin Terminal", 
     page_icon="🧠",
     layout="wide"
 )
 
-st.title("🧠 AI Football Matchday Plugin Terminal")
-st.markdown("Utilizes a **Free OpenRouter AI Processing Node** to autonomously analyze table positions, injuries, and tactical lineups.")
+st.title("🧠 Gemini AI Football Matchday Terminal")
+st.markdown("Utilizes the **Google Gemini 1.5 Flash API** to autonomously analyze table positions, injuries, and tactical lineups.")
 
 # --- SIDEBAR RESEARCH CONFIGURATION PANEL ---
 st.sidebar.title("🔍 Matchday Profile Selector")
 
 home_team = st.sidebar.text_input("Home Club", value="Arsenal")
 away_team = st.sidebar.text_input("Away Club", value="Leeds")
+
+# Option to input user's own free Gemini API key securely in the sidebar
+gemini_api_key = st.sidebar.text_input("Google Gemini API Key", type="password", help="Get a free key at https://google.com")
 
 league_api_mapping = {
     "English Premier League (EPL)": {"slug": "epl"},
@@ -41,10 +44,9 @@ home_formation_change = st.sidebar.checkbox(f"Is {home_team} altering standard f
 away_formation_change = st.sidebar.checkbox(f"Is {away_team} altering standard formation format?", value=False)
 
 st.sidebar.markdown("---")
-submit_analysis = st.sidebar.button("🚀 Execute Autonomous AI Plugin Evaluation", type="primary", use_container_width=True)
+submit_analysis = st.sidebar.button("🚀 Execute Gemini AI Evaluation", type="primary", use_container_width=True)
 
-# --- 🛰️ CONTEXT ENGINE FETCH CHANNELS (WITH CACHE NETWORKS) ---
-
+# --- 🛰️ CONTEXT ENGINE FETCH CHANNELS ---
 @st.cache_data(ttl=120)
 def fetch_live_standings_matrix(fallback_slug):
     """Streams live table metrics safely via open-source data repositories."""
@@ -70,7 +72,6 @@ def fetch_live_standings_matrix(fallback_slug):
             return res_df
     except Exception: pass
     
-    # Real-World Dynamic In-Play Baseline Fallback Grid
     fallback_rows = [
         {"Rank": 1, "Club": "Man City", "MP": 5, "W": 5, "D": 0, "L": 0, "GF": 13, "GA": 5, "GD": 8, "Pts": 15},
         {"Rank": 2, "Club": "Arsenal", "MP": 5, "W": 4, "D": 0, "L": 1, "GF": 8, "GA": 4, "GD": 4, "Pts": 12},
@@ -97,28 +98,30 @@ def fetch_live_news_and_injuries(home, away):
         return alerts
     except Exception: return ["✨ Roster Context Stable: System checking news nodes safely."]
 
-# --- 🧠 THE FREE AI PLUGIN REASONING LAYER ---
-def query_free_ai_plugin(prompt_text):
-    """Sends compiled match parameters directly to an open-source model via OpenRouter's free tier endpoints."""
-    url = "https://openrouter.ai"
-    headers = {
-        "Authorization": "Bearer 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", # Free proxy access token explicitly unlocked for your workspace
-        "Content-Type": "application/json"
-    }
-    data = {
-        "model": "meta-llama/llama-3-8b-instruct:free", # Zero-cost, high-speed LLM endpoint node
-        "messages": [
-            {"role": "system", "content": "You are an expert sports data analyst. Analyze the raw text data and output an executive tactical matchday verdict detailing which SportyBet markets hold the strongest structural edge based on motivation, standings pressure, and injuries. End your response with direct slider adjustment recommendations from -10% to +10% for both clubs."},
-            {"role": "user", "content": prompt_text}
+# --- 🧠 THE GOOGLE GEMINI API REST HANDLER ---
+def query_gemini_api(api_key, prompt_text):
+    """Sends compiled match parameters directly to Google's Gemini 1.5 Flash endpoint."""
+    url = f"https://googleapis.com{api_key}"
+    headers = {"Content-Type": "application/json"}
+    system_instruction = "You are an elite sports data analyst. Analyze the raw text data and output an executive tactical matchday verdict detailing which SportyBet markets hold the strongest structural edge based on motivation, standings pressure, and injuries. End your response with direct slider adjustment recommendations from -10% to +10% for both clubs."
+    
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {"text": f"{system_instruction}\n\n{prompt_text}"}
+                ]
+            }
         ]
     }
     try:
-        res = requests.post(url, headers=headers, json=data, timeout=8)
+        res = requests.post(url, headers=headers, json=payload, timeout=10)
         if res.status_code == 200:
-            return res.json()['choices'][0]['message']['content']
+            data = res.json()
+            return data['candidates'][0]['content']['parts'][0]['text']
     except Exception as e:
-        return f"⚠️ AI Plugin Channel Busy: Handshake timed out ({str(e)}). Proceeding with structural rule evaluation metrics."
-    return "⚠️ AI Plugin Node: Endpoint returned empty response packet layer."
+        return f"⚠️ Gemini API Handshake Error: {str(e)}"
+    return "⚠️ Gemini API Node: Empty response packet or invalid API key."
 
 # --- INITIALIZE CORE LAYOUT GLOBAL MEMORY ---
 if 'analysis_fired' not in st.session_state:
@@ -129,38 +132,38 @@ if 'analysis_fired' not in st.session_state:
 
 # --- TRIGGER EVALUATION DISPATCH PANEL ---
 if submit_analysis:
-    st.session_state.analysis_fired = True
-    league_config = league_api_mapping[selected_league]
-    st.session_state.table_df = fetch_live_standings_matrix(league_config["slug"])
-    st.session_state.news_alerts = fetch_live_news_and_injuries(home_team, away_team)
-    
-    # 🟢 COMPILE DATA PROMPT TO FEED AS INPUT INTO THE AI PLUGIN HANDLER
-    table_text_snapshot = st.session_state.table_df.to_string(index=False)
-    news_text_snapshot = " | ".join(st.session_state.news_alerts)
-    
-    ai_prompt_blueprint = f"""
-    MATCHDAY FIXTURE CONTEXT SUMMARY:
-    • League Division: {selected_league}
-    • Home Club: {home_team} (European fixture within 72h: {home_europe} | Formation Alteration: {home_formation_change})
-    • Away Club: {away_team} (European fixture within 72h: {away_europe} | Formation Alteration: {away_formation_change})
-    • Late Season Dead Rubber: {is_dead_rubber}
-    
-    LIVE STANDINGS MATRIX RECORDS:
-    {table_text_snapshot}
-    
-    BREAKING ROSTER INJURY SCRAPER ALERT PLUGINS:
-    {news_text_snapshot}
-    """
-    
-    with st.spinner("🧠 Streaming match data packet to AI Plugin Node... Processing tactical vectors..."):
-        st.session_state.ai_verdict_output = query_free_ai_plugin(ai_prompt_blueprint)
+    if not gemini_api_key:
+        st.error("🚨 Please enter your [Google Gemini API Key](https://google.com) in the sidebar control panel to proceed.")
+    else:
+        st.session_state.analysis_fired = True
+        league_config = league_api_mapping[selected_league]
+        st.session_state.table_df = fetch_live_standings_matrix(league_config["slug"])
+        st.session_state.news_alerts = fetch_live_news_and_injuries(home_team, away_team)
+        
+        table_text_snapshot = st.session_state.table_df.to_string(index=False)
+        news_text_snapshot = " | ".join(st.session_state.news_alerts)
+        
+        ai_prompt_blueprint = f"""
+        MATCHDAY FIXTURE CONTEXT SUMMARY:
+        • League Division: {selected_league}
+        • Home Club: {home_team} (European fixture within 72h: {home_europe} | Formation Alteration: {home_formation_change})
+        • Away Club: {away_team} (European fixture within 72h: {away_europe} | Formation Alteration: {away_formation_change})
+        • Late Season Dead Rubber: {is_dead_rubber}
+        
+        LIVE STANDINGS MATRIX RECORDS:
+        {table_text_snapshot}
+        
+        BREAKING ROSTER INJURY SCRAPER ALERTS:
+        {news_text_snapshot}
+        """
+        
+        with st.spinner("🧠 Pinging Google Gemini 1.5 Flash Node... Evaluating tactical metrics..."):
+            st.session_state.ai_verdict_output = query_gemini_api(gemini_api_key, ai_prompt_blueprint)
 
 # --- VISUAL SCREEN GRAPHICS RENDER MATRIX ---
-if st.session_state.analysis_fired:
+if st.session_state.analysis_fired and gemini_api_key:
     st.markdown("---")
-    
-    # Render the raw generated response from your new free AI engine node
-    st.subheader("🎯 Automated AI Plugin Situational Verdict")
+    st.subheader("🎯 Automated Gemini AI Situational Verdict")
     st.write(st.session_state.ai_verdict_output)
 
     st.markdown("---")
@@ -178,24 +181,5 @@ if st.session_state.analysis_fired:
             
         styled_table = st.session_state.table_df.style.apply(highlight_target_clubs, axis=1)
         st.dataframe(styled_table, use_container_width=True, hide_index=True)
-
-    st.markdown("---")
-    st.subheader(f"📋 Live Matchday Context Readout: {home_team} vs {away_team}")
-    col_layout1, col_layout2 = st.columns(2)
-    
-    with col_layout1:
-        st.markdown("##### 🩺 Injury & Selection News Feed")
-        for alert in st.session_state.news_alerts:
-            if "🚨" in alert: st.error(alert)
-            else:
-                st.success(alert)
-    with col_layout2:
-        st.markdown("##### 🛠️ Tactical Formation Modifications")
-        if home_formation_change: 
-            st.warning(f"🔄 {home_team} Override: Structural formation alteration reported.")
-            if away_formation_change: 
-                st.warning(f"🔄 {away_team} Override: Structural formation alteration reported.")
-                if not home_formation_change and not away_formation_change:
-                    st.success("📐 Tactical Balance Stable: Standard layout profiles maintained.")
-        else:
-            st.info("💡 Context Dashboard Idle: Select your target league division and matchup clubs in the sidebar control panel, then click '🚀 Execute Autonomous AI Plugin Evaluation' to stream raw metrics to the free Llama 3 processor node.")
+else:
+    st.info("💡 Context Dashboard Idle: Enter your Gemini API key in the sidebar and click 'Execute Gemini AI Evaluation'.")
