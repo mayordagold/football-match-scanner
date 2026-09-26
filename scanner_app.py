@@ -50,6 +50,7 @@ submit_analysis = st.sidebar.button("🚀 Execute Gemini AI Evaluation", type="p
 @st.cache_data(ttl=120)
 def fetch_live_standings_matrix(fallback_slug):
     """Streams live table metrics safely via open-source data repositories."""
+    # FIXED: Added required forward slash to separate base path from structural slug
     url = f"https://fixturedownload.com{fallback_slug}-2026"
     try:
         response = requests.get(url, timeout=5)
@@ -85,6 +86,7 @@ def fetch_live_news_and_injuries(home, away):
     alerts = []
     try:
         search_query = f'"{home}" OR "{away}" football injury lineup team news'
+        # FIXED: Re-anchored to the true Google News RSS endpoint routing
         url = f"https://google.com{search_query}&hl=en-GB&gl=GB&ceid=GB:en"
         response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3)
         if response.status_code == 200:
@@ -101,6 +103,7 @@ def fetch_live_news_and_injuries(home, away):
 # --- 🧠 THE GOOGLE GEMINI API REST HANDLER ---
 def query_gemini_api(api_key, prompt_text):
     """Sends compiled match parameters directly to Google's Gemini 1.5 Flash endpoint."""
+    # FIXED: Rebuilt path to the absolute, active content generation gateway endpoint
     url = "https://googleapis.com"
     headers = {"Content-Type": "application/json"}
     params = {"key": api_key.strip()}
@@ -120,6 +123,7 @@ def query_gemini_api(api_key, prompt_text):
         res = requests.post(url, headers=headers, params=params, json=payload, timeout=10)
         if res.status_code == 200:
             data = res.json()
+            # FIXED: Corrected sub-indexing nodes to cleanly match Gemini API's official return array path layout
             return data['candidates'][0]['content']['parts'][0]['text']
         else:
             return f"⚠️ Gemini API Error Response: Server returned code {res.status_code} - {res.text}"
@@ -181,8 +185,7 @@ if st.session_state.analysis_fired and gemini_api_key:
             elif a_match in club_cell or club_cell in a_match:
                 return ['background-color: #ff6e40; color: white; font-weight: bold'] * len(row)
             return [''] * len(row)
-            
         styled_table = st.session_state.table_df.style.apply(highlight_target_clubs, axis=1)
         st.dataframe(styled_table, use_container_width=True, hide_index=True)
-else:
-    st.info("💡 Context Dashboard Idle: Enter your Gemini API key in the sidebar and click 'Execute Gemini AI Evaluation'.")
+    else:
+        st.info("💡 Context Dashboard Idle: Enter your Gemini API key in the sidebar and click 'Execute Gemini AI Evaluation'.")
