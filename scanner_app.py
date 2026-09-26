@@ -101,8 +101,10 @@ def fetch_live_news_and_injuries(home, away):
 # --- 🧠 THE GOOGLE GEMINI API REST HANDLER ---
 def query_gemini_api(api_key, prompt_text):
     """Sends compiled match parameters directly to Google's Gemini 1.5 Flash endpoint."""
-    url = f"https://googleapis.com{api_key}"
+    url = "https://googleapis.com"
     headers = {"Content-Type": "application/json"}
+    params = {"key": api_key.strip()}
+    
     system_instruction = "You are an elite sports data analyst. Analyze the raw text data and output an executive tactical matchday verdict detailing which SportyBet markets hold the strongest structural edge based on motivation, standings pressure, and injuries. End your response with direct slider adjustment recommendations from -10% to +10% for both clubs."
     
     payload = {
@@ -115,13 +117,14 @@ def query_gemini_api(api_key, prompt_text):
         ]
     }
     try:
-        res = requests.post(url, headers=headers, json=payload, timeout=10)
+        res = requests.post(url, headers=headers, params=params, json=payload, timeout=10)
         if res.status_code == 200:
             data = res.json()
             return data['candidates'][0]['content']['parts'][0]['text']
+        else:
+            return f"⚠️ Gemini API Error Response: Server returned code {res.status_code} - {res.text}"
     except Exception as e:
         return f"⚠️ Gemini API Handshake Error: {str(e)}"
-    return "⚠️ Gemini API Node: Empty response packet or invalid API key."
 
 # --- INITIALIZE CORE LAYOUT GLOBAL MEMORY ---
 if 'analysis_fired' not in st.session_state:
