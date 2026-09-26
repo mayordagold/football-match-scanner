@@ -17,7 +17,7 @@ st.sidebar.title("🔍 Matchday Profile Selector")
 home_team = st.sidebar.text_input("Home Club", value="Malaga CF")
 away_team = st.sidebar.text_input("Away Club", value="Espanyol")
 
-# Clean API key input
+# Clean API key input fields
 gemini_api_key = st.sidebar.text_input("Google Gemini API Key", type="password", help="Get a free key at https://google.com")
 
 league_api_mapping = {
@@ -46,13 +46,13 @@ away_formation_change = st.sidebar.checkbox(f"Is {away_team} altering standard f
 st.sidebar.markdown("---")
 submit_analysis = st.sidebar.button("🚀 Execute Gemini AI Evaluation", type="primary", use_container_width=True)
 
-# --- 🛰️ CONTEXT ENGINE FETCH CHANNELS (UNBLOCKABLE JSON PIPELINE) ---
+# --- 🛰️ CONTEXT ENGINE FETCH CHANNELS ---
 @st.cache_data(ttl=120)
 def fetch_live_standings_matrix(fallback_slug):
     """Streams live table metrics safely via open-source data repositories."""
     url = f"https://fixturedownload.com{fallback_slug}-2026"
     try:
-        response = requests.get(url, timeout=6)
+        response = requests.get(url, timeout=8)
         if response.status_code == 200:
             fixtures = response.json()
             table = {}
@@ -91,7 +91,7 @@ def fetch_live_news_and_injuries(home, away):
     try:
         search_query = f'"{home}" OR "{away}" football injury lineup team news'
         url = f"https://google.com{search_query}&hl=en-GB&gl=GB&ceid=GB:en"
-        response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3)
+        response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=4)
         if response.status_code == 200:
             feed_text = response.text.lower()
             for word in ["injury", "injured", "doubtful", "suspended", "absent", "hamstring"]:
@@ -104,19 +104,24 @@ def fetch_live_news_and_injuries(home, away):
     except Exception: 
         return ["✨ Roster Context Stable: System checking news nodes safely."]
 
-# --- 🧠 DYNAMIC GOOGLE GEMINI API REST HANDLER ---
+# --- 🧠 CLEANED SINGLE GOOGLE GEMINI API REST HANDLER ---
 def query_gemini_api(api_key, prompt_text):
     """Sends compiled match parameters directly to Google's Gemini 1.5 Flash endpoint."""
     clean_key = str(api_key).strip()
     
+    # Trim accidental background copy artifacts seamlessly
     if clean_key.upper().startswith("AQ."):
         clean_key = clean_key[3:]
         
-    url = "https://googleapis.com"
+    url = f"https://googleapis.com{clean_key}"
     headers = {"Content-Type": "application/json"}
-    params = {"key": clean_key}
     
-    system_instruction = "You are an elite sports data analyst. Analyze the raw text data and output an executive tactical matchday verdict detailing which SportyBet markets hold the strongest structural edge based on motivation, standings pressure, and injuries. End your response with direct slider adjustment recommendations from -10% to +10% for both clubs."
+    system_instruction = (
+        "You are an elite sports data analyst. Analyze the raw text data and output an executive "
+        "tactical matchday verdict detailing which SportyBet markets hold the strongest structural edge "
+        "based on motivation, standings pressure, and injuries. End your response with direct slider "
+        "adjustment recommendations from -10% to +10% for both clubs."
+    )
     
     payload = {
         "contents": [
@@ -128,7 +133,7 @@ def query_gemini_api(api_key, prompt_text):
         ]
     }
     try:
-        res = requests.post(url, headers=headers, params=params, json=payload, timeout=12)
+        res = requests.post(url, headers=headers, json=payload, timeout=12)
         if res.status_code == 200:
             data = res.json()
             return data['candidates'][0]['content']['parts'][0]['text']
@@ -199,3 +204,4 @@ if st.session_state.analysis_fired and gemini_api_key:
         st.error("⚠️ Connection Error: Live standings data stream timed out. Please click the button to try again.")
 else:
     st.info("💡 Context Dashboard Idle: Enter your Gemini API key in the sidebar and click 'Execute Gemini AI Evaluation'.")
+    
