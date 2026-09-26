@@ -103,12 +103,19 @@ def fetch_live_news_and_injuries(home, away):
 # --- 🧠 THE GOOGLE GEMINI API REST HANDLER ---
 def query_gemini_api(api_key, prompt_text):
     """Sends compiled match parameters directly to Google's Gemini 1.5 Flash endpoint."""
-    # FIXED: Rebuilt path to the absolute, active content generation gateway endpoint
-    url = "https://googleapis.com"
-    headers = {"Content-Type": "application/json"}
-    params = {"key": api_key.strip()}
+    # Clean up the key to ensure no stray invisible spaces are sent
+    clean_key = str(api_key).strip()
     
-    system_instruction = "You are an elite sports data analyst. Analyze the raw text data and output an executive tactical matchday verdict detailing which SportyBet markets hold the strongest structural edge based on motivation, standings pressure, and injuries. End your response with direct slider adjustment recommendations from -10% to +10% for both clubs."
+    # 🟢 AIRTIGHT PRODUCTION URL ENDPOINT
+    url = f"https://googleapis.com{clean_key}"
+    headers = {"Content-Type": "application/json"}
+    
+    system_instruction = (
+        "You are an elite sports data analyst. Analyze the raw text data and output an executive "
+        "tactical matchday verdict detailing which SportyBet markets hold the strongest structural edge "
+        "based on motivation, standings pressure, and injuries. End your response with direct slider "
+        "adjustment recommendations from -10% to +10% for both clubs."
+    )
     
     payload = {
         "contents": [
@@ -119,16 +126,19 @@ def query_gemini_api(api_key, prompt_text):
             }
         ]
     }
+    
     try:
-        res = requests.post(url, headers=headers, params=params, json=payload, timeout=10)
+        # Directly fire the post request to the full endpoint string
+        res = requests.post(url, headers=headers, json=payload, timeout=12)
         if res.status_code == 200:
             data = res.json()
-            # FIXED: Corrected sub-indexing nodes to cleanly match Gemini API's official return array path layout
+            # Navigate Gemini's exact API return dictionary path
             return data['candidates'][0]['content']['parts'][0]['text']
         else:
             return f"⚠️ Gemini API Error Response: Server returned code {res.status_code} - {res.text}"
     except Exception as e:
         return f"⚠️ Gemini API Handshake Error: {str(e)}"
+
 
 # --- INITIALIZE CORE LAYOUT GLOBAL MEMORY ---
 if 'analysis_fired' not in st.session_state:
